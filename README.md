@@ -12,31 +12,28 @@ where:
 - *-c* flag (optional) is used when a calibration of the NTP servers pool is needed
 - *-s* flag (optional) is used when a manual setup has already been made
 
-### Manual Setup Prerequisites
-- 2 VPCs in the required region, on for the DNS server, the other for the rest (naive host, chronos host, ntp attacker).
-- **DNS Server** machine set up on a vm on one of the VPCs, with:
+### Automated Setup
+This option will only require you to build your configuration file carefully. 
+For the automated setup the "vm_manager" part in not required. 
+The program will build all the resources needed for the experiment from scratch in the chosen AWS region.
+
+### Manual Setup 
+Use carefully.
+For this option to run smoothly, the following resources needed to built prematurally:
+#####VPC #1
+- **DNS Server** :
     - Port 53 opened for incoming traffic
-    - `dnserver.py` and `zones.txt` (found in resources dir) uploaded to vm
-      (notice `zones.txt` needs to reflect the bad server config file that will also be at the chronos client vm,
-      which is a mapping between some "good" NTP servers (taken from chronos servers pool) to IPs of the NTP attacker vm.
-    - Python3 is installed and package dnslib is installed GLOBALLY
-    - The following command should be ran to enable the machine as a functioning DNS server:
-      ```
-      sudo PORT=53 C=1 ZONE_FILE='./zones.txt' ./dnserver.py
-      ```
-    - Until all the following is preformed, the other vms will not be able to communicate. 
-    - When DNS Server is running, the rest of the machines pass their DNS queries to it, which means that with 
-      probability P, they will be redirected to a known host from `zones.txt` (meaning - one of the IPs of the ntp 
-      attacker host). To cancel this redirection and open traffic run with C=0. 
-- **NTP Attacker**
-    - `ntp_adversary.py` file is uploaded to the machine
-    - The following command is ran with the experiments "shift_params" (from config file):
-      ```
-      sudo python ntp_adversary.py [shift_type] [c_shift] [slop_t_0] [slop]
-      ```
-- **Chronos Client**
-    - all the relevant files uploaded and python 3.6 installed
-- **Naive Client** (important: this should be an ubuntu host)
-    - NTP config file changed in the following manners - delete lines that start with *pool* or *server* and replace
-      them with the line `server pool.ntp.org minpoll 3 maxpoll 6`
+    - Python 3.6 installed, dnslib installed (globally)  
+##### VPC #2
+- **DHCP configuration** DHCP options set for this VPC configured with the DNS Server vm's IP as it's DNS server. Notice you might need to reboot the vm's for this change to take place quickly.
+- **NTP Attacker** (Amazon Linux)
+    - Multiple network interfaces with multiple IPs
+    - All traffic open on 0.0.0.0/0
+    - Python 3 installed.
+- **Chronos Client** (centos or anything else)
+    - Python 3 installed.
+- **Naive Client** (ubuntu)
+    - NTP config file changed in the following manners - 
+      - add the line `server pool.ntp.org minpoll 3 maxpoll 6`
+      - un-comment the line `statsdir /var/log/ntpstats/`
     - NTP service is restarted with `sudo service ntp restart`
