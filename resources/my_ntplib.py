@@ -283,23 +283,7 @@ class NTPClient:
             bad_servers_dict = json.loads(f.read())
 
         bad_ip = bad_servers_dict.get(good_ip)
-        if bad_ip:
-            return bad_ip
-        else:
-            good_ip_mapping = good_ip
-            if random.random() < self._attack_probability:
-                good_ip_mapping = self._get_random_bad_ip(bad_servers_dict)
-            bad_servers_dict[good_ip] = good_ip_mapping
-            with open(self._bad_server_config_file_path, 'w') as f:
-                f.write(json.dumps(bad_servers_dict))
-        return good_ip_mapping
-
-    @staticmethod
-    def _get_random_bad_ip(bad_server_dict):
-        for good_ip, bad_ip in bad_server_dict.items():
-            if good_ip != bad_ip:
-                return bad_ip
-        return ""
+        return bad_ip if bad_ip else good_ip
 
     def request(self, host, version=2, port='ntp', timeout=5):
         """Query a NTP server.
