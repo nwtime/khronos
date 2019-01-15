@@ -24,6 +24,7 @@
         "chronos_host": "",
         "naive_host": "",
         "ntp_attacker_host": ""
+        "ntp_private_ips": []
     }
 
 }

@@ -12,7 +12,7 @@ class Consts:
     DEFAULT_UPDATE_INTERVAL = 16
     DEFAULT_TOTAL_TIME = 3600
 
-    DEFAULT_SHIFT_TYPE = ''
+    DEFAULT_SHIFT_TYPE = 'CONSTANT'
     DEFAULT_C_SHIFT = 0.2
     DEFAULT_SLOP_T_0 = 0
     DEFAULT_SLOP = 0.2
@@ -33,6 +33,7 @@ class Consts:
     dns_server_script_path = str(Path('resources', 'dnserver.py').resolve())
     chronos_pool_path = str(Path('resources', 'chronos_servers_pool.json').resolve())
     current_s_path = str(Path('resources', 'current_s.json').resolve())
+    aws_info_path = str(Path('aws_info.json'))
 
     dns_files = [zones_path, dns_server_script_path]
     chronos_files = [chronos_client_script_path, my_ntplib_script_path, chronos_pool_path, current_s_path,

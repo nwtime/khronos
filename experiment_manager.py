@@ -110,6 +110,16 @@ def create_good_servers_pool(calibrate):
     return pool
 
 
+def get_aws_network_ids_for_region():
+    data = json.load(open(Consts.aws_info_path))
+    region_ids = data.get(region)
+    vpc_id = region_ids.get("vpc_id")
+    dns_subnet_id = region_ids.get("dns_subnet_id")
+    clients_subnet_id = region_ids.get("clients_subnet_id")
+    sg_id = region_ids.get("sg_id")
+    return vpc_id, dns_subnet_id, clients_subnet_id, sg_id
+
+
 def log_experiment():
     now = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M")
     logs_dir = str(Path(f"chronos_experiment_{now}").resolve())
@@ -136,24 +146,29 @@ def log_experiment():
     plt.savefig(str(Path(logs_dir,f"chronos_offsets_{now}")))
 
 
-def setup():
+def automated_setup():
     """
     Prepare all machines from scratch by the correct order.
     :return:
     """
     start = time.time()
+    vpc_id, dns_subnet_id, clients_subnet_id, sg_id = get_aws_network_ids_for_region()
 
     logger.info("Started VM setup")
-    _dns_host = vm_manager.setup_dns_server(region, key_file_path)
-    _bad_ips, _chronos_host, _naive_host, _ntp_attacker_host = vm_manager.setup_clients_and_ntp(num_attackers,
-                                                                                            dns_host, region)
+    ips = vm_manager.setup_all_vms(key_file_path, region, vpc_id, dns_subnet_id, clients_subnet_id, sg_id, num_attackers)
+    _chronos_host, _naive_host, _ntp_attacker_host, _dns_host = ips[1], ips[2], ips[3], ips[4]
     logger.info("VMs are up")
-    create_bad_server_configuration(_bad_ips)
-    vm_manager.load_vm_data(dns_host, naive_host, chronos_host, ntp_attacker_host, key_file_path)
-    vm_manager.run_dns_server(dns_host, key_file_path)
-    vm_manager.run_ntp_attacker(ntp_attacker_host, shift_params, key_file_path)
+
+    create_bad_server_configuration(ips[0])
+    vm_manager.load_vm_data(dns_host, chronos_host, ntp_attacker_host, key_file_path)
+
+    vm_manager.build_dhcp_settings(_dns_host, vpc_id)
+    vm_manager.run_dns_server(_dns_host, key_file_path, attack_ratio)
+    vm_manager.edit_ntp_config(_naive_host)
+    vm_manager.run_ntp_attacker(_ntp_attacker_host, shift_params, key_file_path)
+
     logger.info(f"All vms are up and ready to use, took {time.time() - start} seconds")
-    return _dns_host, _chronos_host, _naive_host, _ntp_attacker_host
+    return _chronos_host, _naive_host
 
 
 def run_experiment():
@@ -239,17 +254,16 @@ if __name__ == "__main__":
     manual_setup = True if '-s' in sys.argv else False
 
     region = config.get('region', Consts.DEFAULT_REGION)
+    region = config.get('region', Consts.DEFAULT_REGION)
     if region not in NTPservers.keys():
         sys.stdout("Invalid state. Options are " + ", ".join(list(NTPservers.keys())))
         exit()
     ntp_region_host = NTPservers[region][0]
-
+    shift_params = config.get('shift_params')
     if not manual_setup:
         try:
-            # create chronos_servers_pool or take it from chronos_servers_pool.json
-            shift_params = config.get('shift_params')
             chronos_servers_pool = create_good_servers_pool(calibrate)
-            dns_host, chronos_host, naive_host, ntp_attacker_host = setup()
+            chronos_host, naive_host = automated_setup()
         except BaseException as err:
             vm_manager.teardown_tf(num_attackers)
             logger.info(err)
@@ -263,9 +277,15 @@ if __name__ == "__main__":
         chronos_host = vm_params.get('chronos_host')
         naive_host = vm_params.get('naive_host')
         ntp_attacker_host = vm_params.get('ntp_attacker_host')
+        ntp_bad_ips = vm_params.get('ntp_private_ips')
         logger.info("No setup needed, taking host names from config file.")
         logger.info("WARNING: USE THIS OPTION CAREFULLY. For the experiment to run successfully the given hosts needed "
                     "to be set according to the experiment's prerequisites listed in README")
+        chronos_servers_pool = create_good_servers_pool(calibrate)
+        create_bad_server_configuration(ntp_bad_ips)
+        vm_manager.load_vm_data(dns_host, chronos_host, ntp_attacker_host, key_file_path)
+        vm_manager.run_dns_server(dns_host, key_file_path, attack_ratio)
+        vm_manager.run_ntp_attacker(ntp_attacker_host, shift_params, key_file_path)
 
     offsets = run_experiment()
     logger.info("Experiment completed.")
