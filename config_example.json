@@ -23,8 +23,14 @@
         "dns_host": "",
         "chronos_host": "",
         "naive_host": "",
-        "ntp_attacker_host": ""
+        "ntp_attacker_host": "",
         "ntp_private_ips": []
+    },
+    "auth": {
+        "account_owner": "",
+        "access_key_id": "",
+        "secret_key_id": "",
+        "key_pair_name": ""
     }
 
 }

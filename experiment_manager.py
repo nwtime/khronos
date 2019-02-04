@@ -88,7 +88,6 @@ def create_bad_server_configuration(ntp_attacker_ips):
             line = f"{good_ip} A {bad_ip}"
             zones_f.write(line)
 
-
 def create_good_servers_pool(calibrate):
     """
     read the chronos_servers_pool file contents.
@@ -161,7 +160,9 @@ def automated_setup():
 
     create_bad_server_configuration(ips[0])
     vm_manager.load_vm_data(dns_host, chronos_host, ntp_attacker_host, key_file_path)
-
+    # TODO: ubuntu
+    # apt-get update
+    # apt-get install ntpd
     vm_manager.build_dhcp_settings(_dns_host, vpc_id)
     vm_manager.run_dns_server(_dns_host, key_file_path, attack_ratio)
     vm_manager.edit_ntp_config(_naive_host)
@@ -254,9 +255,8 @@ if __name__ == "__main__":
     manual_setup = True if '-s' in sys.argv else False
 
     region = config.get('region', Consts.DEFAULT_REGION)
-    region = config.get('region', Consts.DEFAULT_REGION)
     if region not in NTPservers.keys():
-        sys.stdout("Invalid state. Options are " + ", ".join(list(NTPservers.keys())))
+        sys.stdout("Invalid region. Options are " + ", ".join(list(NTPservers.keys())))
         exit()
     ntp_region_host = NTPservers[region][0]
     shift_params = config.get('shift_params')

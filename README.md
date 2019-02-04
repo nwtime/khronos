@@ -19,7 +19,8 @@ The program will build all the resources needed for the experiment from scratch 
 
 ### Manual Setup 
 Use carefully.
-For this option to run smoothly, the following resources needed to built prematurally:
+For this option to run smoothly, the following resources needed to built prematurally. You can build them manually, or use 
+the terraform files (build dns_server and clients_and_attacker, stop and install what needs to be installed, then build dhcp_settings)
 #####VPC #1
 - **DNS Server** :
     - Port 53 opened for incoming traffic
@@ -37,3 +38,4 @@ For this option to run smoothly, the following resources needed to built prematu
       - add the line `server pool.ntp.org minpoll 3 maxpoll 6`
       - un-comment the line `statsdir /var/log/ntpstats/`
     - NTP service is restarted with `sudo service ntp restart`
+
