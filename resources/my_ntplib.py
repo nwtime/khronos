@@ -272,10 +272,9 @@ class NTPStats(NTPPacket):
 class NTPClient:
     """NTP client session."""
 
-    def __init__(self, attack_probability=0, bad_server_config_path='bad_servers.json'):
+    def __init__(self, bad_server_config_path='bad_servers.json'):
         """Constructor."""
         self._bad_server_config_file_path = bad_server_config_path
-        self._attack_probability = attack_probability
         # {'good_ip_a': 'bad_ip', 'good_ip_b': 'good_ip_b'}
 
     def _get_ip(self, good_ip):

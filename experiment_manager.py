@@ -60,7 +60,7 @@ def get_chronos_offset(update_flag, prev_chronos_offset):
     err = chronos_params.get('err', Consts.DEFAULT_ERR)
     smooth = '-s' if chronos_params.get('smooth', Consts.DEFAULT_SMOOTH) else ''
     return vm_manager.run_cmd_on_vm(host=chronos_host,
-                                    cmd=f'python chronos_client.py {m} {d} {k} {w} {err} {attack_ratio} '
+                                    cmd=f'python chronos_client.py {m} {d} {k} {w} {err}'
                                         f'{prev_chronos_offset} {update} {smooth}',
                                     key=key_file_path)
 

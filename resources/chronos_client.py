@@ -17,7 +17,7 @@ def req_multiple_servers(server_indices, servers_pool):
     :param server_indices:
     :return:
     """
-    ntp_client = NTPClient(attack_prob)
+    ntp_client = NTPClient()
     ips_to_query = [servers_pool[idx] for idx in server_indices]
     responses = []
     ips_failed = []
@@ -80,7 +80,6 @@ if __name__ == "__main__":
     smooth = True if '-s' in sys.argv else False
     update = True if '-u' in sys.argv else False
 
-    attack_prob = float(sys.argv[6])
     truth = float(sys.argv[7])
 
     servers_pool = json.load(open('chronos_servers_pool.json'))   # [ip1, ip2..]
