@@ -1,12 +1,7 @@
 import os
 import socket
-import sys
-#my_ntplib_path = './my_ntplib.py'
-#sys.path.append(os.path.abspath(my_ntplib_path))
 import random
 import math
-#from my_ntplib import NTPClient
-#import sys
 import json
 from ntplib import NTPClient
 from time_update import _linux_adjtime, _linux_adjtime_quick
@@ -34,12 +29,12 @@ def calibration(n, server_pool_path, zone_pools_path, zone, max_time_secs=2*60*6
         print 'iteration {iterations}, so far collected {k} servers.'.format(
             iterations=iterations,
             k=len(final_server_list))
+        json.dump(list(final_server_list), open(server_pool_path, 'wb'),
+                      sort_keys=True, indent=4, separators=(',', ': '))
         iterations += 1
         print "going to sleep"
         time.sleep(60)
         t = time.time()
-    json.dump(final_server_list, open(server_pool_path, 'wb'),
-                  sort_keys=True, indent=4, separators=(',', ': '))
 
 
 def update_query_servers(m):
@@ -111,9 +106,9 @@ def get_offset(m, d, k, w, err):
         retries += 1
         print "failure %d: %f > %f and/or %f > %f" % (
             retries, math.fabs(max(T) - min(T)), 2 * w, math.fabs(avg_offset), w * 2 + err)
-    print("PANIC")
-    raise Exception("Panic!")
     # PANIC
+    print("PANIC")
+    #raise Exception("Panic!")
     offsets = req_multiple_servers(SERVERS_POOL)
     offsets.sort()
     t = int(d * m)
@@ -145,9 +140,9 @@ def get_offset_quick(m, d, k, w, err):
                 return avg_offset
         retries += 1
         print "failure %d: %f > %f" % (retries, math.fabs(max(T) - min(T)), 2 * w)
-    print("PANIC")
-    raise Exception("Panic!")
     # PANIC
+    print("PANIC")
+    #raise Exception("Panic!")
     offsets = req_multiple_servers(SERVERS_POOL)
     offsets.sort()
     t = int(d * m)
@@ -187,7 +182,7 @@ def update_loop(update_query_interval, query_interval, server_pool_path, state_p
 # sudo python /media/sf_temp/chronos_d.py -m 5 -d 0.2 -p /media/sf_temp/chronos_servers_pool.json -S /media/sf_temp/current_s.json
 # sudo python /media/sf_temp/chronos_d.py -m 5 -d 0.2 -p /media/sf_temp/chronos_servers_pool.json -S /media/sf_temp/current_s.json -w 0.025 -e 0.05 -o /media/sf_temp/
 # sudo python /media/sf_temp/chronos_d.py -m 5 -d 0.2 -p /media/sf_temp/chronos_servers_pool_0.json -S /media/sf_temp/current_s_0.json -w 0.025 -e 0.05 -o /media/sf_temp/ -n 200 -M 300 -C -Z /media/sf_temp/zone_pools.json
-# chronos_d.py -m 5 -d 0.2 -p chronos_servers_pool_0.json -S current_s_0.json -w 0.025 -e 0.05 -n 200 -M 300 -C
+
 if __name__ == "__main__":
     import argparse
 
@@ -210,8 +205,8 @@ if __name__ == "__main__":
                         help="path for json of pool servers")
     parser.add_argument("-S", "--state", default='current_s.json',
                         help="path for json of chronos state (last queried servers)")
-    parser.add_argument("-s", "--start_quick", action="store_true",
-                        help="start with full update not smooth")
+    parser.add_argument("-D", "--dont_start_quick", action="store_true",
+                        help="dont start with full update (might lead to panic on first update)")
     parser.add_argument("-c", "--conf_path", default=None,
                         help="path for json of chronos configuration (overides all other params)")
     parser.add_argument("-o", "--output_path", default=".",
@@ -238,7 +233,7 @@ if __name__ == "__main__":
         query_interval=args.query_interval,
         server_pool_path=args.server_pool_path,
         state_path=args.state,
-        start_quick=args.start_quick,
+        start_quick=not args.dont_start_quick,
         output_path=args.output_path
     )
     if args.conf_path:
