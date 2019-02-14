@@ -1,4 +1,5 @@
 import os
+import socket
 import sys
 #my_ntplib_path = './my_ntplib.py'
 #sys.path.append(os.path.abspath(my_ntplib_path))
@@ -11,9 +12,34 @@ from ntplib import NTPClient
 from time_update import _linux_adjtime, _linux_adjtime_quick
 import time
 
+
 QUERY_SERVERS = []
 SERVERS_POOL = []
 STATE_PATH = 'current_s.json'
+
+
+def calibration(n, server_pool_path, zone_pools_path, zone, max_time_secs=2*60*60):
+    print("Starting to calibrate servers pool.")
+    urls = json.load(open(zone_pools_path, 'r'))
+    zone_urls = urls[zone]
+    final_server_list = set()
+    iterations = 1
+    start = time.time()
+    t = start
+    while len(final_server_list) < n and t-start < max_time_secs:
+        for url in zone_urls:
+            print url
+            ips = set(socket.gethostbyname_ex(url)[2])
+            final_server_list |= ips
+        print 'iteration {iterations}, so far collected {k} servers.'.format(
+            iterations=iterations,
+            k=len(final_server_list))
+        iterations += 1
+        print "going to sleep"
+        time.sleep(60)
+        t = time.time()
+    json.dump(final_server_list, open(server_pool_path, 'wb'),
+                  sort_keys=True, indent=4, separators=(',', ': '))
 
 
 def update_query_servers(m):
@@ -157,8 +183,11 @@ def update_loop(update_query_interval, query_interval, server_pool_path, state_p
             time.sleep(query_interval)
 
 
+
 # sudo python /media/sf_temp/chronos_d.py -m 5 -d 0.2 -p /media/sf_temp/chronos_servers_pool.json -S /media/sf_temp/current_s.json
 # sudo python /media/sf_temp/chronos_d.py -m 5 -d 0.2 -p /media/sf_temp/chronos_servers_pool.json -S /media/sf_temp/current_s.json -w 0.025 -e 0.05 -o /media/sf_temp/
+# sudo python /media/sf_temp/chronos_d.py -m 5 -d 0.2 -p /media/sf_temp/chronos_servers_pool_0.json -S /media/sf_temp/current_s_0.json -w 0.025 -e 0.05 -o /media/sf_temp/ -n 200 -M 300 -C -Z /media/sf_temp/zone_pools.json
+# chronos_d.py -m 5 -d 0.2 -p chronos_servers_pool_0.json -S current_s_0.json -w 0.025 -e 0.05 -n 200 -M 300 -C
 if __name__ == "__main__":
     import argparse
 
@@ -177,7 +206,7 @@ if __name__ == "__main__":
                         help="time interval between choosing new m servers")
     parser.add_argument("-q", "--query_interval", type=float, default=10.0,
                         help="time interval between queries")
-    parser.add_argument("-p", "--server_pool", default='chronos_servers_pool.json',
+    parser.add_argument("-p", "--server_pool_path", default='chronos_servers_pool.json',
                         help="path for json of pool servers")
     parser.add_argument("-S", "--state", default='current_s.json',
                         help="path for json of chronos state (last queried servers)")
@@ -187,6 +216,16 @@ if __name__ == "__main__":
                         help="path for json of chronos configuration (overides all other params)")
     parser.add_argument("-o", "--output_path", default=".",
                         help="path output directory")
+    parser.add_argument("-n", "--pool_size", type=int, default=9,
+                        help="number of servers in the pool")
+    parser.add_argument("-Z", "--zone_pools_path", default='zone_pools.json',
+                        help="url per state"),
+    parser.add_argument("-z", "--zone", default='global',
+                        help="zone for calibration (default:global) [global,europe,uk,usa,germany,syngapore,australia,japan,asia,south_america]")
+    parser.add_argument("-C", "--force_calibration", default=False, action="store_true",
+                        help="force calibration (generating pool file")
+    parser.add_argument("-M", "--max_calibration_time", type=int, default=2*60*60,
+                        help="max calibration time in seconds")
     args = parser.parse_args()
 
     conf = dict(
@@ -197,7 +236,7 @@ if __name__ == "__main__":
         err=args.local_error_bound,
         update_query_interval=args.update_query_interval,
         query_interval=args.query_interval,
-        server_pool_path=args.server_pool,
+        server_pool_path=args.server_pool_path,
         state_path=args.state,
         start_quick=args.start_quick,
         output_path=args.output_path
@@ -206,7 +245,17 @@ if __name__ == "__main__":
         fconf = json.load(file(args.conf_path))
         conf.update(fconf)
         json.dump(conf, file(args.conf_path, "wb"),
-              sort_keys=True, indent=4, separators=(',', ': '))
+                  sort_keys=True, indent=4, separators=(',', ': '))
+
+    if not os.path.isfile(args.server_pool_path) or args.force_calibration:
+        calibration_conf = dict(
+            n=args.pool_size,
+            server_pool_path=args.server_pool_path,
+            zone_pools_path=args.zone_pools_path,
+            zone=args.zone,
+            max_time_secs=args.max_calibration_time
+        )
+        calibration(**calibration_conf)
 
     update_loop(**conf)
 

@@ -1,0 +1,78 @@
+{     "global": [
+        "0.pool.ntp.org",
+        "1.pool.ntp.org",
+        "2.pool.ntp.org",
+        "3.pool.ntp.org"
+    ],
+
+     "europe": [
+        "0.europe.pool.ntp.org",
+        "1.europe.pool.ntp.org",
+        "2.europe.pool.ntp.org",
+        "3.europe.pool.ntp.org"
+    ],
+
+    "uk": [
+        "0.uk.pool.ntp.org",
+        "1.uk.pool.ntp.org",
+        "2.uk.pool.ntp.org",
+        "3.uk.pool.ntp.org"
+    ],
+
+    "usa": [
+        "0.us.pool.ntp.org",
+        "1.us.pool.ntp.org",
+        "2.us.pool.ntp.org",
+        "3.us.pool.ntp.org"
+    ],
+
+    "canada": [
+
+        "0.ca.pool.ntp.org",
+        "1.ca.pool.ntp.org",
+        "2.ca.pool.ntp.org",
+        "3.ca.pool.ntp.org"
+    ],
+
+    "germany": [
+        "0.de.pool.ntp.org",
+        "1.de.pool.ntp.org",
+        "2.de.pool.ntp.org",
+        "3.de.pool.ntp.org"
+    ],
+
+    "syngapore": [
+        "0.sg.pool.ntp.org",
+        "1.sg.pool.ntp.org",
+        "2.sg.pool.ntp.org",
+        "3.sg.pool.ntp.org"
+    ],
+
+    "australia": [
+        "0.oceania.pool.ntp.org",
+        "1.oceania.pool.ntp.org",
+        "2.oceania.pool.ntp.org",
+        "3.oceania.pool.ntp.org"
+    ],
+
+    "japan" : [
+        "0.jp.pool.ntp.org",
+        "1.jp.pool.ntp.org",
+        "2.jp.pool.ntp.org",
+        "3.jp.pool.ntp.org"
+    ],
+
+    "asia": [
+        "0.asia.pool.ntp.org",
+        "1.asia.pool.ntp.org",
+        "2.asia.pool.ntp.org",
+        "3.asia.pool.ntp.org"
+    ],
+
+    "south_america": [
+        "0.south-america.pool.ntp.org",
+        "1.south-america.pool.ntp.org",
+        "2.south-america.pool.ntp.org",
+        "3.south-america.pool.ntp.org"
+    ]
+}
