@@ -310,6 +310,10 @@ class WorkThread(threading.Thread):
 
 import json
 
+# python ntp_multi_attack_server.py CONSTANT 1 1 1 bad_ips_pool.json
+# CHRONOS:
+# sudo python /media/sf_temp/chronos_d.py -m 5 -d 0.2 -p /media/sf_temp/chronos_servers_pool1.json -S /media/sf_temp/current_s_0.json -w 0.025 -e 0.05 -o /media/sf_temp/ -n 30
+
 if __name__ == "__main__":
     # USAGE ntp_adversary.py [shift_type] [c_shift] [slop_t] [slop] [interfaces_file]
     shift_type = sys.argv[1]

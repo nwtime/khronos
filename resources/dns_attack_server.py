@@ -143,7 +143,11 @@ def handle_sig(signum, frame):
     logger.info('pid=%d, got signal: %s, stopping...', os.getpid(), signal.Signals(signum).name)
     exit(0)
 
+# dig @localhost -q pool.ntp.org -p 1053
 
+# sudo -i
+# cd /media/sf_temp
+# PORT=1053 python  bad_dns_server.py
 if __name__ == '__main__':
     signal.signal(signal.SIGTERM, handle_sig)
 
