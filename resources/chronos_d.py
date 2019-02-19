@@ -151,7 +151,7 @@ def get_offset_quick(m, d, k, w, err):
     return avg_offset
 
 
-def update_loop(update_query_interval, query_interval, server_pool_path, state_path, start_quick, output_path, **query_args):
+def update_loop(update_query_interval, query_interval, server_pool_path, state_path, start_quick, output_path, conf_path=None, **query_args):
     global QUERY_SERVERS
     global STATE_PATH
     STATE_PATH = state_path
@@ -159,21 +159,24 @@ def update_loop(update_query_interval, query_interval, server_pool_path, state_p
     r = int(update_query_interval / query_interval)
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     file_name = timestamp + "_chronos_offsets.csv"
-    file_path = os.path.join(output_path, file_name)
+    #file_path = os.path.join(output_path, file_name)
+    file_path = output_path + file_name
+    if conf_path:
+        os.system("cp %s %s" % (conf_path, file_path[:-3]+"json") )
     out = file(file_path, "w")
     if start_quick:
         print "start quick"
         offset = get_offset_quick(**query_args)
-        print _linux_adjtime_quick(offset)
         print "quick offset =", offset
+        print _linux_adjtime_quick(offset)
         out.write("%f,%f\n" % (time.time(), offset))
         time.sleep(query_interval)
     while 1:
         QUERY_SERVERS = []
         for i in range(r):
             offset = get_offset(**query_args)
-            print _linux_adjtime(offset)
             print "offset =", offset
+            print _linux_adjtime(offset)
             out.write("%f,%f\n" % (time.time(), offset))
             time.sleep(query_interval)
 
@@ -209,7 +212,7 @@ if __name__ == "__main__":
                         help="dont start with full update (might lead to panic on first update)")
     parser.add_argument("-c", "--conf_path", default=None,
                         help="path for json of chronos configuration (overides all other params)")
-    parser.add_argument("-o", "--output_path", default=".",
+    parser.add_argument("-o", "--output_path", default="./",
                         help="path output directory")
     parser.add_argument("-n", "--pool_size", type=int, default=9,
                         help="number of servers in the pool")
