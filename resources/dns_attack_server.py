@@ -77,8 +77,8 @@ class Record:
 
 
 class BadResolver(ProxyResolver):
-    def __init__(self, upstream, ip_file, bad_ip_pool_file, bad_probability=0.3):
-        super(BadResolver, self).__init__(upstream, 53, 5)
+    def __init__(self, upstream, ip_file, bad_ip_pool_file, bad_probability=0.3, timeout=5):
+        super(BadResolver, self).__init__(upstream, 53, timeout)
         if os.path.isfile(ip_file):
             self.ips = json.load(file(ip_file))
         else:
@@ -149,17 +149,39 @@ def handle_sig(signum, frame):
 # cd /media/sf_temp
 # PORT=1053 python  bad_dns_server.py
 if __name__ == '__main__':
+
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-p", "--port", type=int, default=53,
+                        help="listening port")
+    parser.add_argument("-u", "--upstream_server", default="8.8.8.8",
+                        help="upstream DNS server")
+    parser.add_argument("-i", "--ips_state_file", default='ips.json',
+                        help="current ips state file path")
+    parser.add_argument("-b", "--bad_server_pool", default='bad_ips_pool.json',
+                        help="path for bad server pool")
+    parser.add_argument("-r", "--bad_probability", type=float, default=0.3,
+                        help="bad server ratio")
+    parser.add_argument("-P", "--upstream_port", type=int, default=53,
+                        help="upsrteam DNS server port")
+    parser.add_argument("-d", "--dont_attack", action="store_true",
+                        help="don't attack - forward everything to upstream")
+    args = parser.parse_args()
+
     signal.signal(signal.SIGTERM, handle_sig)
+    if not args.dont_attack:
+        resolver = BadResolver(
+            upstream=args.upstream_server,
+            ip_file=args.ips_state_file,
+            bad_ip_pool_file=args.bad_server_pool,
+            bad_probability=args.bad_probability)
+    else:
+        resolver = ProxyResolver(address=args.upstream_server, port=args.upstream_port, timeout=5)
+    udp_server = DNSServer(resolver, port=args.port)
+    tcp_server = DNSServer(resolver, port=args.port, tcp=True)
 
-    port = int(os.getenv('PORT', 53))
-    upstream = os.getenv('UPSTREAM', '8.8.8.8')
-    ips_file = Path(os.getenv('IPS_FILE', 'ips.json')).as_posix()
-    bad_ip_pool_file = Path(os.getenv('BAD_FILE', 'bad_ips_pool.json')).as_posix()
-    resolver = BadResolver(upstream, ip_file=ips_file, bad_ip_pool_file=bad_ip_pool_file)
-    udp_server = DNSServer(resolver, port=port)
-    tcp_server = DNSServer(resolver, port=port, tcp=True)
-
-    logger.info('starting DNS server on port %d, upstream DNS server "%s"', port, upstream)
+    logger.info('starting DNS server on port %d, upstream DNS server "%s"', args.port, args.upstream_server)
     udp_server.start_thread()
     tcp_server.start_thread()
 

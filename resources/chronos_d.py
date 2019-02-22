@@ -185,7 +185,7 @@ def update_loop(update_query_interval, query_interval, server_pool_path, state_p
 # sudo python /media/sf_temp/chronos_d.py -m 5 -d 0.2 -p /media/sf_temp/chronos_servers_pool.json -S /media/sf_temp/current_s.json
 # sudo python /media/sf_temp/chronos_d.py -m 5 -d 0.2 -p /media/sf_temp/chronos_servers_pool.json -S /media/sf_temp/current_s.json -w 0.025 -e 0.05 -o /media/sf_temp/
 # sudo python /media/sf_temp/chronos_d.py -m 5 -d 0.2 -p /media/sf_temp/chronos_servers_pool_0.json -S /media/sf_temp/current_s_0.json -w 0.025 -e 0.05 -o /media/sf_temp/ -n 200 -M 300 -C -Z /media/sf_temp/zone_pools.json
-
+# sudo python chronos_d.py -m 12 -d 0.34  -w 0.025 -e 0.05 -n 500 -M 36000 -C -z usa
 if __name__ == "__main__":
     import argparse
 

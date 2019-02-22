@@ -29,7 +29,9 @@ def get_ntpd_offset():
     rtype: float
     """
     import subprocess
-    p = subprocess.Popen(["ntpdc", "-pn"], stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
+    # p = subprocess.Popen(["ntpdc", "-pn"], stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
+    # ntpdc is deprecated
+    p = subprocess.Popen(["ntpq", "-pn"], stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
     stdout, stderr = p.communicate()
     print stdout
     for row in stdout.split("\n"):
@@ -99,6 +101,7 @@ def install_ntpd():
 
 # sudo python /media/sf_temp/ntpd.py -o /media/sf_temp/
 # sudo python /media/sf_temp/ntpd.py -o /media/sf_temp/ -C -Z /media/sf_temp/zone_pools.json
+# sudo python ntpd.py -C -z usa
 if __name__ == "__main__":
     import argparse
 
