@@ -1,7 +1,12 @@
 import os
 import json
 import time
+import platform
 
+if platform.linux_distribution()[0] == "Ubuntu":
+    NTP_SERVICE_NAME = "ntp"
+else:
+    NTP_SERVICE_NAME = "ntpd"
 
 QUERY_SERVERS = []
 SERVERS_POOL = []
@@ -38,7 +43,7 @@ def get_ntpd_offset():
         if row.startswith("*"):
             splitted = [val for val in row.split(" ") if val]
             offset = splitted[-2]
-            return float(offset)
+            return float(offset)/1000
     return None
 
 
@@ -90,7 +95,7 @@ def configure_ntpd(zone, minpoll, maxpoll, zone_pools_path):
             new_line = "server %s minpoll %d maxpoll %d\n" % (url, minpoll, maxpoll)
             new_conf.append(new_line)
     file("/etc/ntp.conf","w").writelines(new_conf)
-    res = os.system("sudo service ntp restart")
+    res = os.system("sudo service %s restart" % NTP_SERVICE_NAME)
     time.sleep(2**maxpoll+1)
     return res
 

@@ -63,17 +63,21 @@ def _linux_set_time_sec(sec):
     ts.tv_nsec = int((sec%1) * 1000000000)
 
     # http://linux.die.net/man/3/clock_settime
-    librt.clock_settime(CLOCK_REALTIME, ctypes.byref(ts))
+    res = librt.clock_settime(CLOCK_REALTIME, ctypes.byref(ts))
+    return res
 
 
 def _linux_adjtime(sec):
     tv = timeval()
     tv.tv_sec = long(sec)
-    tv.tv_usec = long((sec%1) * 1000000)
+    if sec > 0:
+        tv.tv_usec = long((sec%1) * 1000000)
+    else:
+        tv.tv_usec = -long((-sec % 1) * 1000000)
     tv2 = timeval()
     # http://linux.die.net/man/3/adjtime
     res = librt.adjtime(ctypes.byref(tv), ctypes.byref(tv2))
-    return res, tv2.tv_sec, tv2.tv_usec
+    return res, tv2.tv_sec + tv2.tv_usec/1000000.0
 
 
 def _linux_adjtime_quick(sec):

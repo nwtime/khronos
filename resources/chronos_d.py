@@ -126,6 +126,7 @@ def get_offset_quick(m, d, k, w, err):
 
         # query chosen servers
         offsets = req_multiple_servers(QUERY_SERVERS)
+        #offsets = req_multiple_servers(SERVERS_POOL)
         offsets.sort()
 
         # trim d from each side of the server responses (offsets)
@@ -185,6 +186,7 @@ def update_loop(update_query_interval, query_interval, server_pool_path, state_p
 # sudo python /media/sf_temp/chronos_d.py -m 5 -d 0.2 -p /media/sf_temp/chronos_servers_pool.json -S /media/sf_temp/current_s.json
 # sudo python /media/sf_temp/chronos_d.py -m 5 -d 0.2 -p /media/sf_temp/chronos_servers_pool.json -S /media/sf_temp/current_s.json -w 0.025 -e 0.05 -o /media/sf_temp/
 # sudo python /media/sf_temp/chronos_d.py -m 5 -d 0.2 -p /media/sf_temp/chronos_servers_pool_0.json -S /media/sf_temp/current_s_0.json -w 0.025 -e 0.05 -o /media/sf_temp/ -n 200 -M 300 -C -Z /media/sf_temp/zone_pools.json
+#  sudo service ntp stop
 # sudo python chronos_d.py -m 12 -d 0.34  -w 0.025 -e 0.05 -n 500 -M 36000 -C -z usa
 if __name__ == "__main__":
     import argparse
@@ -198,11 +200,11 @@ if __name__ == "__main__":
                         help="number of update failure before panic")
     parser.add_argument("-w", "--distance_threshold", type=float, default=0.025,
                         help="offsets distance threshold")
-    parser.add_argument("-e", "--local_error_bound", type=float, default=0.025,
+    parser.add_argument("-e", "--local_error_bound", type=float, default=0.05,
                         help="offsets distance threshold")
     parser.add_argument("-u", "--update_query_interval", type=float, default=60.0,
                         help="time interval between choosing new m servers")
-    parser.add_argument("-q", "--query_interval", type=float, default=10.0,
+    parser.add_argument("-q", "--query_interval", type=float, default=60.0,
                         help="time interval between queries")
     parser.add_argument("-p", "--server_pool_path", default='chronos_servers_pool.json',
                         help="path for json of pool servers")
