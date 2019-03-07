@@ -95,14 +95,17 @@ class BadResolver(ProxyResolver):
         if type(rdata) in [dns.A, dns.AAAA]:
             ip = repr(rdata)
             if ip in self.ips["good"]:
+                print ">>> %s in good (remains the same)" % ip
                 return rdata
             elif ip in self.ips["bad"]:
                 new_ip = self.ips["bad"][ip]
+                print ">>> %s in bad, replacing with %s" % (ip, new_ip)
                 return dns.A(new_ip)
             else:
                 if random.random() < self.bad_probability:
                     ip_index = random.randrange(0, len(self.bad_ip_pool))
                     new_ip = self.bad_ip_pool[ip_index]
+                    print ">>> %s new, replaced with bad %s" % (ip, new_ip)
                     new_rdata = dns.A(new_ip)
                     if len(self.ips["bad"]) < len(self.bad_ip_pool):
                         self.ips["bad"][ip] = new_ip
@@ -112,15 +115,18 @@ class BadResolver(ProxyResolver):
                     if len(self.ips["bad"]) < len(self.bad_ip_pool):
                         self.ips["good"][ip] = rdata.__class__.__name__  # str(type(rdata)).rsplit(".", 1)[-1]
                         self.update_ip_file()
+                        print ">>> %s new, added to good ips" % (ip, )
                         return rdata
                     ip_index = random.randrange(0, len(self.ips["good"]))
                     new_ip = self.ips["good"].keys()[ip_index]
+                    print ">>> %s new, replaced with good %s" % (ip, new_ip)
                     rtype = self.ips["good"][new_ip]
                     if rtype == "A":
                         new_rdata = dns.A(new_ip)
                     else:
                         new_rdata = dns.AAAA(new_ip)
                     return new_rdata
+        return rdata
 
     def inspect_rr(self, rr):
         if "ntp" in str(rr.rname).lower():
@@ -131,9 +137,9 @@ class BadResolver(ProxyResolver):
         replay = super(BadResolver, self).resolve(request, handler)
         print request
         print replay.rr
-        print type(replay.rr[0])
-        print type(replay.rr[0].rdata)
-        print [r.rdata for r in replay.rr]
+        #print type(replay.rr[0])
+        #print type(replay.rr[0].rdata)
+        #print [r.rdata for r in replay.rr]
         map(self.inspect_rr, replay.rr)
         return replay
 
@@ -150,6 +156,8 @@ def handle_sig(signum, frame):
 # PORT=1053 python  bad_dns_server.py
 if __name__ == '__main__':
 
+    line_args = [datetime.utcnow().strftime("%Y%m%d_%H%M%S")] + os.sys.argv
+    file(os.sys.argv[0]+".log", "a+").write(" ".join(line_args))
     import argparse
 
     parser = argparse.ArgumentParser()

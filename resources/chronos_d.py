@@ -1,3 +1,24 @@
+'''Copyright (c) <2019> <Neta Rozen Schiff>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.'''
+
+
 import os
 import socket
 import random
@@ -65,20 +86,36 @@ def req_multiple_servers(servers=QUERY_SERVERS):
     :return:
     """
     ntp_client = NTPClient()
-    responses = []
+    responses = {}
     ips_failed = []
     for ip in servers:
         try:
-            responses.append(ntp_client.request(ip))
+            responses[ip] = ntp_client.request(ip)
         except Exception as err:
             ips_failed.append(ip)
             print ip, err
     for ip in ips_failed:
         try:
-            responses.append(ntp_client.request(ip))
+            responses[ip] = ntp_client.request(ip)
         except Exception as err:
             print ip, err
-    return [res.offset for res in responses if res]
+    return {ip: responses[ip].offset for ip in servers if ip in responses}
+
+
+def get_offset_simple(m, d, k, w, err, servers):
+
+    # query chosen servers
+    T = req_multiple_servers(servers).values()
+    # check whether all surviving samples are "close"
+    avg_offset = sum(T) / len(T)
+    if (
+            (math.fabs(max(T) - min(T)) <= 2 * w) and
+            (math.fabs(avg_offset) <= w * 2 + err)
+    ):
+            return avg_offset
+    print "failure: %f > %f and/or %f > %f" % (
+        math.fabs(max(T) - min(T)), 2 * w, math.fabs(avg_offset), w * 2 + err)
+    return None
 
 
 def get_offset(m, d, k, w, err):
@@ -89,12 +126,15 @@ def get_offset(m, d, k, w, err):
     while retries < k:
 
         # query chosen servers
-        offsets = req_multiple_servers(QUERY_SERVERS)
-        offsets.sort()
+        offsets_dict = req_multiple_servers(QUERY_SERVERS)
+        sorted_servers = sorted(offsets_dict.keys(), key=offsets_dict.get)
+        mm = len(offsets_dict)
 
         # trim d from each side of the server responses (offsets)
-        t = int(d * m)
-        T = offsets[t:m - t]
+        t = int(d * mm)
+        trimmed_servers = sorted_servers[t:mm - t]
+
+        T = [offsets_dict[s] for s in trimmed_servers]
 
         # check whether all surviving samples are "close"
         avg_offset = sum(T) / len(T)
@@ -102,19 +142,23 @@ def get_offset(m, d, k, w, err):
                 (math.fabs(max(T) - min(T)) <= 2 * w) and
                 (math.fabs(avg_offset) <= w * 2 + err)
         ):
-                return avg_offset
+                return avg_offset, trimmed_servers
         retries += 1
         print "failure %d: %f > %f and/or %f > %f" % (
             retries, math.fabs(max(T) - min(T)), 2 * w, math.fabs(avg_offset), w * 2 + err)
+        update_query_servers(m)
     # PANIC
     print("PANIC")
     #raise Exception("Panic!")
-    offsets = req_multiple_servers(SERVERS_POOL)
-    offsets.sort()
-    t = int(d * m)
-    T = offsets[t:m - t]
+
+    offsets_dict = req_multiple_servers(SERVERS_POOL)
+    sorted_servers = sorted(offsets_dict.keys(), key=offsets_dict.get)
+    mm = len(offsets_dict)
+    t = int(d * mm)
+    trimmed_servers = sorted_servers[t:mm - t]
+    T = [offsets_dict[s] for s in trimmed_servers]
     avg_offset = sum(T) / float(len(T))
-    return avg_offset
+    return avg_offset, None
 
 
 def get_offset_quick(m, d, k, w, err):
@@ -125,13 +169,14 @@ def get_offset_quick(m, d, k, w, err):
     while retries < k:
 
         # query chosen servers
-        offsets = req_multiple_servers(QUERY_SERVERS)
+        offsets = req_multiple_servers(QUERY_SERVERS).values()
         #offsets = req_multiple_servers(SERVERS_POOL)
         offsets.sort()
 
         # trim d from each side of the server responses (offsets)
-        t = int(d * m)
-        T = offsets[t:m - t]
+        mm = len(offsets)
+        t = int(d * mm)
+        T = offsets[t:mm - t]
 
         # check whether all surviving samples are "close"
         avg_offset = sum(T) / len(T)
@@ -141,13 +186,15 @@ def get_offset_quick(m, d, k, w, err):
                 return avg_offset
         retries += 1
         print "failure %d: %f > %f" % (retries, math.fabs(max(T) - min(T)), 2 * w)
+        update_query_servers(m)
     # PANIC
     print("PANIC")
     #raise Exception("Panic!")
-    offsets = req_multiple_servers(SERVERS_POOL)
+    offsets = req_multiple_servers(SERVERS_POOL).values()
     offsets.sort()
-    t = int(d * m)
-    T = offsets[t:m - t]
+    mm = len(offsets)
+    t = int(d * mm)
+    T = offsets[t:mm - t]
     avg_offset = sum(T) / float(len(T))
     return avg_offset
 
@@ -158,6 +205,7 @@ def update_loop(update_query_interval, query_interval, server_pool_path, state_p
     STATE_PATH = state_path
     read_servers_pool(server_pool_path)
     r = int(update_query_interval / query_interval)
+    print "r=", r
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     file_name = timestamp + "_chronos_offsets.csv"
     #file_path = os.path.join(output_path, file_name)
@@ -172,22 +220,80 @@ def update_loop(update_query_interval, query_interval, server_pool_path, state_p
         print _linux_adjtime_quick(offset)
         out.write("%f,%f\n" % (time.time(), offset))
         time.sleep(query_interval)
+    last_offset = 0
     while 1:
         QUERY_SERVERS = []
         for i in range(r):
-            offset = get_offset(**query_args)
+            offset, _ = get_offset(**query_args)
+            if math.fabs(offset - last_offset) < 0.0005:
+                offset = last_offset
+            else:
+                offset = int(offset*1000) / 1000.0
+                last_offset = offset
             print "offset =", offset
             print _linux_adjtime(offset)
             out.write("%f,%f\n" % (time.time(), offset))
             time.sleep(query_interval)
 
 
+def update_loop2(update_query_interval, query_interval, server_pool_path, state_path, start_quick, output_path, conf_path=None, old_distance_thresh=0.010, **query_args):
+    global QUERY_SERVERS
+    global STATE_PATH
+    STATE_PATH = state_path
+    read_servers_pool(server_pool_path)
+    r = int(update_query_interval / query_interval)
+    print "r=", r
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    file_name = timestamp + "_chronos_offsets.csv"
+    #file_path = os.path.join(output_path, file_name)
+    file_path = output_path + file_name
+    if conf_path:
+        os.system("cp %s %s" % (conf_path, file_path[:-3]+"json") )
+    out = file(file_path, "w")
+    if start_quick:
+        print "start quick"
+        offset = get_offset_quick(**query_args)
+        print "quick offset =", offset
+        print _linux_adjtime_quick(offset)
+        out.write("%f,%f\n" % (time.time(), offset))
+        time.sleep(query_interval)
+
+    QUERY_SERVERS = []
+    old_offset, old_servers = get_offset(**query_args)
+    print "offset =", old_offset
+    print _linux_adjtime(old_offset)
+    out.write("%f,%f\n" % (time.time(), old_offset))
+    time.sleep(query_interval)
+
+    while 1:
+        for i in range(r):
+            if old_servers is not None:
+                old_offset = get_offset_simple(servers=old_servers, **query_args)
+            else:
+                old_offset = None
+            print "old_servers_offset =", old_offset
+            new_offset, new_servers = get_offset(**query_args)
+            print "new_offset =", new_offset
+            if old_offset is not None and math.fabs(new_offset - old_offset) > old_distance_thresh:
+                print "using new offset"
+                offset = new_offset
+                old_servers = new_servers
+            else:
+                print "using old offset"
+                offset = old_offset
+            print _linux_adjtime(offset)
+            out.write("%f,%f\n" % (time.time(), offset))
+            time.sleep(query_interval)
+        QUERY_SERVERS = []
 
 # sudo python /media/sf_temp/chronos_d.py -m 5 -d 0.2 -p /media/sf_temp/chronos_servers_pool.json -S /media/sf_temp/current_s.json
 # sudo python /media/sf_temp/chronos_d.py -m 5 -d 0.2 -p /media/sf_temp/chronos_servers_pool.json -S /media/sf_temp/current_s.json -w 0.025 -e 0.05 -o /media/sf_temp/
 # sudo python /media/sf_temp/chronos_d.py -m 5 -d 0.2 -p /media/sf_temp/chronos_servers_pool_0.json -S /media/sf_temp/current_s_0.json -w 0.025 -e 0.05 -o /media/sf_temp/ -n 200 -M 300 -C -Z /media/sf_temp/zone_pools.json
-#  sudo service ntp stop
-# sudo python chronos_d.py -m 12 -d 0.34  -w 0.025 -e 0.05 -n 500 -M 36000 -C -z usa
+# sudo service ntp stop
+# sudo python chronos_d.py -m 12 -d 0.34  -w 0.025 -e 0.05 -n 500 -M 36000 -C -z usa -p chronos_servers_pool_oragon.json
+# sudo python chronos_d.py -m 12 -d 0.34 -z usa -p chronos_servers_pool_oragon.json -u 3600 -q 60
+
+
 if __name__ == "__main__":
     import argparse
 
@@ -258,6 +364,7 @@ if __name__ == "__main__":
         calibration(**calibration_conf)
 
     update_loop(**conf)
+    #update_loop2(**conf)
 
 
 

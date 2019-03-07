@@ -1,3 +1,24 @@
+'''Copyright (c) <2019> <Neta Rozen Schiff>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.'''
+
+
 import os
 import json
 import time
@@ -65,19 +86,23 @@ def read_loop(read_interval, output_path, conf_path=None):
         time.sleep(read_interval)
 
 
-def configure_ntpd(zone, minpoll, maxpoll, zone_pools_path):
+def configure_ntpd(zone, minpoll, maxpoll, zone_pools_path, addr_command="pool"):
+    def add_addrs(zone_urls, new_conf):
+        for url in zone_urls:
+            new_line = "%s %s minpoll %d maxpoll %d\n" % (addr_command, url, minpoll, maxpoll)
+            new_conf.append(new_line)
+    wrote_servers = False
     urls = json.load(open(zone_pools_path, 'r'))
     zone_urls = urls[zone]
     old_conf = file("/etc/ntp.conf").readlines()
     new_conf = []
-    wrote_servers = False
     set_statsdir  = False
     for line in old_conf:
-        if line.startswith("#server ") or line.startswith("server "):
+        if line.startswith("#server ") or line.startswith("server ")  or line.startswith("pool ") or line.startswith("#pool "):
+            if line.startswith("#"):
+                new_conf.append(line)
             if not wrote_servers:
-                for url in zone_urls:
-                    new_line = "server %s minpoll %d maxpoll %d\n" %(url, minpoll, maxpoll)
-                    new_conf.append(new_line)
+                add_addrs(zone_urls, new_conf)
                 wrote_servers = True
         elif "statsdir " in line:
             if line.startswith("#"):
@@ -91,9 +116,7 @@ def configure_ntpd(zone, minpoll, maxpoll, zone_pools_path):
     if not set_statsdir:
         new_conf.append("statsdir /var/log/ntpstats/\n")
     if not wrote_servers:
-        for url in zone_urls:
-            new_line = "server %s minpoll %d maxpoll %d\n" % (url, minpoll, maxpoll)
-            new_conf.append(new_line)
+        add_addrs(zone_urls, new_conf)
     file("/etc/ntp.conf","w").writelines(new_conf)
     res = os.system("sudo service %s restart" % NTP_SERVICE_NAME)
     time.sleep(2**maxpoll+1)
@@ -123,10 +146,12 @@ if __name__ == "__main__":
                         help="zone for calibration (default:global) [global,europe,uk,usa,germany,syngapore,australia,japan,asia,south_america]")
     parser.add_argument("-C", "--configure_ntpd", default=False, action="store_true",
                         help="reconfigure ntpd service and restart it")
-    parser.add_argument("-M", "--maxpoll_param", type=int, default=4,
+    parser.add_argument("-M", "--maxpoll_param", type=int, default=6,
                         help="max calibration time in seconds")
-    parser.add_argument("-m", "--minpoll_param", type=int, default=3,
+    parser.add_argument("-m", "--minpoll_param", type=int, default=6,
                         help="max calibration time in seconds")
+    parser.add_argument("-a", "--addr_command", default='pool',
+                        help="addres configuration command (default:pool) [pool, server, ...]")
     args = parser.parse_args()
 
     if args.configure_ntpd:
@@ -134,7 +159,8 @@ if __name__ == "__main__":
             zone_pools_path=args.zone_pools_path,
             zone=args.zone,
             maxpoll=args.maxpoll_param,
-            minpoll=args.minpoll_param
+            minpoll=args.minpoll_param,
+            addr_command=args.addr_command
         )
         if args.conf_path:
             fconf = json.load(file(args.conf_path))
