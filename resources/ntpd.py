@@ -129,7 +129,10 @@ def install_ntpd():
 
 # sudo python /media/sf_temp/ntpd.py -o /media/sf_temp/
 # sudo python /media/sf_temp/ntpd.py -o /media/sf_temp/ -C -Z /media/sf_temp/zone_pools.json
-# sudo python ntpd.py -C -z usa
+# sudo python ntpd.py -C -z usa -a server
+# sudo python ntpd.py -C -z germany -a server
+# sudo python ntpd.py -C -z uk -a server
+
 if __name__ == "__main__":
     import argparse
 
@@ -138,7 +141,7 @@ if __name__ == "__main__":
                         help="path for json of ntpd configuration (overides all other params)")
     parser.add_argument("-o", "--output_path", default="./",
                         help="path output directory")
-    parser.add_argument("-r", "--read_state_interval", type=float, default=2**4,
+    parser.add_argument("-r", "--read_state_interval", type=float, default=2**6,
                         help="interval between reading ntpd state")
     parser.add_argument("-Z", "--zone_pools_path", default='zone_pools.json',
                         help="url per state"),

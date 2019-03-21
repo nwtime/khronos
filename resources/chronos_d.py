@@ -135,6 +135,7 @@ def get_offset(m, d, k, w, err):
         trimmed_servers = sorted_servers[t:mm - t]
 
         T = [offsets_dict[s] for s in trimmed_servers]
+        min_offset = min(T, key=math.fabs)
 
         # check whether all surviving samples are "close"
         avg_offset = sum(T) / len(T)
@@ -142,7 +143,7 @@ def get_offset(m, d, k, w, err):
                 (math.fabs(max(T) - min(T)) <= 2 * w) and
                 (math.fabs(avg_offset) <= w * 2 + err)
         ):
-                return avg_offset, trimmed_servers
+                return avg_offset, trimmed_servers, min_offset
         retries += 1
         print "failure %d: %f > %f and/or %f > %f" % (
             retries, math.fabs(max(T) - min(T)), 2 * w, math.fabs(avg_offset), w * 2 + err)
@@ -158,7 +159,7 @@ def get_offset(m, d, k, w, err):
     trimmed_servers = sorted_servers[t:mm - t]
     T = [offsets_dict[s] for s in trimmed_servers]
     avg_offset = sum(T) / float(len(T))
-    return avg_offset, None
+    return avg_offset, None, None
 
 
 def get_offset_quick(m, d, k, w, err):
@@ -199,7 +200,7 @@ def get_offset_quick(m, d, k, w, err):
     return avg_offset
 
 
-def update_loop(update_query_interval, query_interval, server_pool_path, state_path, start_quick, output_path, conf_path=None, **query_args):
+def update_loop1(update_query_interval, query_interval, server_pool_path, state_path, start_quick, output_path, conf_path=None, **query_args):
     global QUERY_SERVERS
     global STATE_PATH
     STATE_PATH = state_path
@@ -221,15 +222,60 @@ def update_loop(update_query_interval, query_interval, server_pool_path, state_p
         out.write("%f,%f\n" % (time.time(), offset))
         time.sleep(query_interval)
     last_offset = 0
+
     while 1:
         QUERY_SERVERS = []
         for i in range(r):
-            offset, _ = get_offset(**query_args)
-            if math.fabs(offset - last_offset) < 0.0005:
+            offset, _, _ = get_offset(**query_args)
+            if math.fabs(offset - last_offset) < 0.001:
                 offset = last_offset
             else:
                 offset = int(offset*1000) / 1000.0
                 last_offset = offset
+            print "offset =", offset
+            print _linux_adjtime(offset)
+            out.write("%f,%f\n" % (time.time(), offset))
+            time.sleep(query_interval)
+
+
+def update_loop(update_query_interval, query_interval, server_pool_path, state_path, start_quick, output_path, conf_path=None, **query_args):
+    global QUERY_SERVERS
+    global STATE_PATH
+    STATE_PATH = state_path
+    read_servers_pool(server_pool_path)
+    r = int(update_query_interval / query_interval)
+    print "r=", r
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    file_name = timestamp + "_chronos_offsets.csv"
+    #file_path = os.path.join(output_path, file_name)
+    file_path = output_path + file_name
+    if conf_path:
+        os.system("cp %s %s" % (conf_path, file_path[:-3]+"json") )
+    out = file(file_path, "w")
+    if start_quick:
+        print "start quick"
+        offset = get_offset_quick(**query_args)
+        print "quick offset =", offset
+        print _linux_adjtime_quick(offset)
+        out.write("%f,%f\n" % (time.time(), offset))
+        time.sleep(query_interval)
+
+    while 1:
+        QUERY_SERVERS = []
+        for i in range(r):
+            offset, _, min_offset = get_offset(**query_args)
+            if min_offset is not None and math.fabs(offset - min_offset) < 0.001:
+                offset = min_offset
+            #else:
+            #    offset = int(offset*1000) / 1000.0
+            #offset = offset / 4
+            thresh = 0.0005
+            if math.fabs(offset) < thresh:
+                offset = 0
+            elif offset < 0:
+                offset += thresh
+            else:
+                offset -= thresh
             print "offset =", offset
             print _linux_adjtime(offset)
             out.write("%f,%f\n" % (time.time(), offset))
@@ -259,7 +305,8 @@ def update_loop2(update_query_interval, query_interval, server_pool_path, state_
         time.sleep(query_interval)
 
     QUERY_SERVERS = []
-    old_offset, old_servers = get_offset(**query_args)
+    old_offset, old_servers, _ = get_offset(**query_args)
+    #old_offset = old_offset/4
     print "offset =", old_offset
     print _linux_adjtime(old_offset)
     out.write("%f,%f\n" % (time.time(), old_offset))
@@ -272,7 +319,7 @@ def update_loop2(update_query_interval, query_interval, server_pool_path, state_
             else:
                 old_offset = None
             print "old_servers_offset =", old_offset
-            new_offset, new_servers = get_offset(**query_args)
+            new_offset, new_servers, _ = get_offset(**query_args)
             print "new_offset =", new_offset
             if old_offset is not None and math.fabs(new_offset - old_offset) > old_distance_thresh:
                 print "using new offset"
@@ -291,7 +338,12 @@ def update_loop2(update_query_interval, query_interval, server_pool_path, state_
 # sudo python /media/sf_temp/chronos_d.py -m 5 -d 0.2 -p /media/sf_temp/chronos_servers_pool_0.json -S /media/sf_temp/current_s_0.json -w 0.025 -e 0.05 -o /media/sf_temp/ -n 200 -M 300 -C -Z /media/sf_temp/zone_pools.json
 # sudo service ntp stop
 # sudo python chronos_d.py -m 12 -d 0.34  -w 0.025 -e 0.05 -n 500 -M 36000 -C -z usa -p chronos_servers_pool_oragon.json
+# sudo python chronos_d.py -m 12 -d 0.34 -n 500 -M 36000 -C -z uk -p chronos_servers_pool_oragon.json -u 3600 -q 60
 # sudo python chronos_d.py -m 12 -d 0.34 -z usa -p chronos_servers_pool_oragon.json -u 3600 -q 60
+# sudo python chronos_d.py -m 12 -d 0.34 -n 500 -M 36000 -C -z germany -p chronos_servers_pool_frankfurt.json -u 3600 -q 60
+# sudo python chronos_d.py -m 12 -d 0.34 -n 500 -M 36000 -C -z usa -p chronos_servers_pool_virginia.json -u 3600 -q 60
+# sudo python chronos_d.py -m 12 -d 0.34 -n 500 -M 36000 -C -z uk -p chronos_servers_pool_london.json -u 3600 -q 60
+
 
 
 if __name__ == "__main__":

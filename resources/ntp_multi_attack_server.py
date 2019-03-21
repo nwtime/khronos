@@ -250,6 +250,7 @@ class RecvThread(threading.Thread):
             if stopFlag:
                 logger.info("RecvThread Ended")
                 break
+            # readable, writable, exceptional = select.select(inputs, outputs, inputs)
             rlist, wlist, elist = select.select(self.sockets, [], [], 1)
             if len(rlist) != 0:
                 logger.info("Received {n} packets".format(n=len(rlist)))
@@ -257,6 +258,7 @@ class RecvThread(threading.Thread):
                     try:
                         sid = sockets.index(tempSocket)
                         data, addr = tempSocket.recvfrom(1024)
+                        # getting the current ntp time and putting it in a queue (for each socket)
                         recvTimestamp = system_to_ntp_time(time.time())
                         taskQueue.put((data, addr, sid, recvTimestamp))
                     except socket.error as msg:
@@ -303,14 +305,17 @@ class WorkThread(threading.Thread):
                 break
             try:
                 data, addr, sid, recvTimestamp = taskQueue.get(timeout=1)
+                # neta - why do we need timeout?
                 recvPacket = NTPPacket()
                 recvPacket.from_data(data)
                 time_shift = self.get_time_shift(t=recvTimestamp- NTP.NTP_DELTA)
+                # recvTimestamp = the time when we opened the socket, NTP.NTP_DELTA = the current computer time
                 timeStamp_high, timeStamp_low = recvPacket.GetTxTimeStamp()
-
+                # neta - what is it the "high" and "low"?
                 sendPacket = self.create_send_packet(**self.packet_params)
 
                 sendPacket.ref_timestamp = recvTimestamp - 5
+                # neta - updeting the ref_timestamp to the time where the socket was opened - 5?
                 sendPacket.SetOriginTimeStamp(timeStamp_high, timeStamp_low)
                 sendPacket.recv_timestamp = recvTimestamp + time_shift
                 now = time.time()
