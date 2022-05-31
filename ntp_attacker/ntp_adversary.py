@@ -11,10 +11,10 @@ import logging
 taskQueue = queue.Queue()
 stopFlag = False
 
-shift_type = sys.argv[1]
-c_shift = sys.argv[2]
-slop_t_0 = sys.argv[3]
-slop = sys.argv[4]
+##shift_type = sys.argv[1]
+##c_shift = sys.argv[2]
+##slop_t_0 = sys.argv[3]
+##slop = sys.argv[4]
 
 handler = logging.StreamHandler()
 handler.setLevel(logging.INFO)
@@ -268,9 +268,11 @@ class WorkThread(threading.Thread):
         self.socket = socket
 
     def get_time_shift(self, t):
+        logger.info("1")
         if shift_type == 'CONSTANT':
+            logger.info("2")
             return c_shift
-        time_shift = (slop * (t - slop_t_0)) if t > slop_t_0 else 0
+        time_shift = (slop * (t - slop_t)) if t > slop_t else 0
         return time_shift
 
     def run(self):
@@ -326,6 +328,8 @@ if __name__ == "__main__":
 
     while True:
         try:
+            with open("aaa.txt", 'w') as f:
+                f.write('a')
             time.sleep(0.5)
         except KeyboardInterrupt:
 

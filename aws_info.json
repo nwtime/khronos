@@ -1,8 +1,0 @@
-{"us-west-2":
-    {
-        "clients_vpc_id": "vpc-038e467b",
-        "clients_subnet_id": "subnet-dc4b0c97",
-        "dns_subnet_id": "subnet-0e7605141e0eaab98",
-        "sg_id": "sg-0f9abc08f53fb2c52"
-    }
-}

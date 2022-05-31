@@ -9,19 +9,26 @@ from pathlib import Path
 from textwrap import wrap
 from time import sleep
 import random
+import time
 
 from dnslib import DNSLabel, QTYPE, RR, dns
 from dnslib.proxy import ProxyResolver
 from dnslib.server import DNSServer
 
 SERIAL_NO = int((datetime.utcnow() - datetime(1970, 1, 1)).total_seconds())
-
-handler = logging.StreamHandler()
-handler.setLevel(logging.INFO)
+logger = logging.getLogger()
+handler = logging.FileHandler(f'logfile_{datetime.now().strftime("%Y-%m-%d_%H:%M")}.log')
 handler.setFormatter(logging.Formatter('%(asctime)s: %(message)s', datefmt='%H:%M:%S'))
 
-logger = logging.getLogger(__name__)
 logger.addHandler(handler)
+#logger.error('Our First Log Message')
+
+#handler = logging.StreamHandler()
+#handler.setLevel(logging.INFO)
+#handler.setFormatter(logging.Formatter('%(asctime)s: %(message)s', datefmt='%H:%M:%S'))
+
+#logger = logging.getLogger(__name__)
+#logger.addHandler(handler)
 logger.setLevel(logging.INFO)
 
 TYPE_LOOKUP = {
@@ -115,6 +122,9 @@ class Resolver(ProxyResolver):
         return zones
 
     def resolve(self, request, handler):
+#        with open("aaa.txt", 'w') as f:
+#            f.write(f"{time.time()}")
+#        logger.info("click")
         type_name = QTYPE[request.q.qtype]
         reply = request.reply()
         for record in self.records:
@@ -130,7 +140,7 @@ class Resolver(ProxyResolver):
                 new_record = Record(rname=request.q.qname, rtype='A', args=arg)
                 self.records.append(new_record)
                 reply.add_answer(new_record.rr)
-                logger.info("no record for %s, mapped it to %s", request.q.qname, arg)
+                logger.info("\033[33m no record for %s, mapped it to %s \033[0m", request.q.qname, arg)
                 return reply
         # no direct zone so look for an SOA record for a higher level zone
         for record in self.records:
@@ -145,10 +155,10 @@ class Resolver(ProxyResolver):
         return super().resolve(request, handler)
 
     def _get_some_arg(self):
-        #random_record = random.sample(self.records, 1)[0].rr.rdata.data
-        #record_ip = (str(i) for i in random_record)
-        #ip = ".".join(record_ip)
-        ip = '54.68.132.136'
+        # random_record = random.sample(self.records, 1)[0].rr.rdata.data
+        # record_ip = (str(i) for i in random_record)
+        # ip = ".".join(record_ip)
+        ip = '10.0.28.196'#'54.68.132.136'
         logger.info("ADDED %s", ip)
         return ip
 
@@ -159,13 +169,13 @@ def handle_sig(signum, frame):
 
 
 if __name__ == '__main__':
+    # for the signal SIGTERM - call the handle_sig function
     signal.signal(signal.SIGTERM, handle_sig)
-
     port = int(os.getenv('PORT', 53))
     close_traffic = bool(int(os.getenv('CLOSE', 1)))
-    attack_probability = float(os.getenv('P', 0.2))
+    attack_probability = float(os.getenv('P', 0.4))
     upstream = os.getenv('UPSTREAM', '8.8.8.8')
-    zone_file = Path(os.getenv('ZONE_FILE', '/zones/zones.txt'))
+    zone_file = Path(os.getenv('ZONE_FILE', 'zones.txt'))
     resolver = Resolver(upstream, zone_file)
     udp_server = DNSServer(resolver, port=port)
     tcp_server = DNSServer(resolver, port=port, tcp=True)
@@ -177,9 +187,12 @@ if __name__ == '__main__':
         logger.info('traffic is open, upstream DNS server "%s', upstream)
     udp_server.start_thread()
     tcp_server.start_thread()
-
+#    with open("a.txt", 'w') as f:
+#        f.write('1')
     try:
         while udp_server.isAlive():
+#            with open("aa.txt", 'w') as f:
+#                f.write('1')
             sleep(1)
     except KeyboardInterrupt:
         pass

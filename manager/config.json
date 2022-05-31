@@ -1,0 +1,29 @@
+{
+    "chronos_params": {
+        "m": 12,
+        "d": 0.33,
+        "w": 0.025,
+        "drift": 0.005,
+        "k": 5
+    },
+    "region": "usa",
+    "attack_ratio": 0.4,
+    "delta_ntp": 1800,
+    "delta_chronos": 10,
+    "total_time": 60000,
+    "shift_params": {
+        "shift_type": "CULUMATIVE",
+        "c_shift": 0.2,
+        "slop_t_0": 0,
+        "slop": 0.3
+    },
+    "vm_params": {
+        "dns_host": "3.220.196.163",
+        "chronos_host": "52.207.230.223",
+        "naive_host": "34.224.213.179",
+        "ntp_attacker_host": "54.235.18.141",
+        "ntp_attacker_private": "10.0.28.196"
+    }
+}
+
+
