@@ -8,6 +8,7 @@ import select
 import sys
 import logging
 
+
 taskQueue = queue.Queue()
 stopFlag = False
 
@@ -16,12 +17,27 @@ stopFlag = False
 ##slop_t_0 = sys.argv[3]
 ##slop = sys.argv[4]
 
-handler = logging.StreamHandler()
-handler.setLevel(logging.INFO)
+#handler = logging.StreamHandler()
+#handler.setLevel(logging.INFO)
+#handler.setFormatter(logging.Formatter('%(asctime)s: %(message)s', datefmt='%H:%M:%S'))
+
+#logger = logging.getLogger(__name__)
+#logger.addHandler(handler)
+#logger.setLevel(logging.INFO)
+#SERIAL_NO = int((datetime.utcnow() - datetime(1970, 1, 1)).total_seconds())
+logger = logging.getLogger()
+handler = logging.FileHandler(f'logfile_{datetime.datetime.now().strftime("%Y-%m-%d_%H:%M")}.log')
 handler.setFormatter(logging.Formatter('%(asctime)s: %(message)s', datefmt='%H:%M:%S'))
 
-logger = logging.getLogger(__name__)
 logger.addHandler(handler)
+#logger.error('Our First Log Message')
+
+#handler = logging.StreamHandler()
+#handler.setLevel(logging.INFO)
+#handler.setFormatter(logging.Formatter('%(asctime)s: %(message)s', datefmt='%H:%M:%S'))
+
+#logger = logging.getLogger(__name__)
+#logger.addHandler(handler)
 logger.setLevel(logging.INFO)
 
 def system_to_ntp_time(timestamp):
@@ -312,7 +328,7 @@ if __name__ == "__main__":
     # USAGE ntp_adversary.py [shift_type] [c_shift] [slop_t] [slop]
     shift_type = sys.argv[1]
     c_shift = float(sys.argv[2])
-    slop_t = float(sys.argv[3])
+    slop_t = system_to_ntp_time(time.time())#float(sys.argv[3])
     slop = float(sys.argv[4])
 
     listenIp = "0.0.0.0"
@@ -326,10 +342,19 @@ if __name__ == "__main__":
     workThread = WorkThread(socket)
     workThread.start()
 
+
+#   starting_time = time.time()
+#
+#    while True:
+#        try:
+#            time.sleep(0.5)
+#            if (abs(time.time() - starting_time) >= 60*120):
+#                starting_time = time.time()
+#                slop_t = starting_time
     while True:
         try:
-            with open("aaa.txt", 'w') as f:
-                f.write('a')
+#            with open("aaa.txt", 'w') as f:
+#                f.write('a')
             time.sleep(0.5)
         except KeyboardInterrupt:
 
@@ -345,4 +370,3 @@ if __name__ == "__main__":
     pass
     # accept ntp request
     # return ntp response with timeshift
-

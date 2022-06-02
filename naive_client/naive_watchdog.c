@@ -50,7 +50,7 @@ double getIPv4Offset() {
             pclose(fp);
             offset = offset / 1000;
             char log_msg[1000] = {0};
-            snprintf(log_msg, sizeof(log_msg), "finished naive iteration. offset = %f", offset);
+            snprintf(log_msg, sizeof(log_msg), "finished naive iteration. offset = %f, remote ip = %s, refid = %s", offset, remote, refid);
             logger(log_msg, log_file);
             printf("naive offset = %f\n", offset);
             return offset;
@@ -79,9 +79,9 @@ int read_config_naive(int* deltaNTP) {
 
 void clock_update(double offset) {
     char command[100] = {0};
-    if (fabs(offset) < 0.0001) {
-        offset = 0.0001;
-    }
+//    if (fabs(offset) < 0.1) {
+//        return;
+//    }
     if (offset >= 0) {
         sprintf(command, "timedatectl set-time '+%f'\n", offset);
     } else {
