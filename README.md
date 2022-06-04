@@ -1,5 +1,6 @@
-# Chronos Experiment Project
-This projects provides a Chronos_d, a Chronos client which is used as a watchdog for safer NTPv4 ([see details in the paper](https://www.ndss-symposium.org/wp-content/uploads/2018/02/ndss2018_02A-2_Deutsch_paper.pdf)).
+# Chronos NTP Client Project
+This projects provides a Chronos_d, a Chronos client which is used as a watchdog for improving NTPv4 client security against powerful attackers
+who are in direct control of a large number of NTP servers (see details in [Chronos paper](https://www.ndss-symposium.org/wp-content/uploads/2018/02/ndss2018_02A-2_Deutsch_paper.pdf) and in [Chronos IETF draft](https://datatracker.ietf.org/doc/draft-ietf-ntp-chronos/04/)).
 
 Moreover, an end-to-end experiment environment is provided.
 
