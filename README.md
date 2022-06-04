@@ -1,10 +1,11 @@
 # Chronos Experiment Project
-This projects provides a Chronosd, a Chronos client which is used as a watchdog for safer NTPv4 ([see details in the paper](https://www.ndss-symposium.org/wp-content/uploads/2018/02/ndss2018_02A-2_Deutsch_paper.pdf)).
+This projects provides a Chronos_d, a Chronos client which is used as a watchdog for safer NTPv4 ([see details in the paper](https://www.ndss-symposium.org/wp-content/uploads/2018/02/ndss2018_02A-2_Deutsch_paper.pdf)).
 
 Moreover, an end-to-end experiment environment is provided.
 
-This repository consists of two Chronos client implemantations: (i) python implemantation (in the master branch), and (ii) C implemantation (in the ''final project'') branch. 
-Next, the python implemantation is presented.
+This repository consists of two Chronos client implementations: (i) python implementation (in the master branch), and (ii) C implementation (in the ''final project'') branch. 
+Next, the python implementation is presented.
+
 # Usage
 
 Given a virtual env with the required packages installed (matplotlib, fabric), run:
@@ -45,7 +46,7 @@ where the optional arguments are as follows:
 
 ### Test environment setup 
 Use carefully.
-For this option to run smoothly, the following resources needed to built prematurally. You can build them manually, or use 
+For this option to run smoothly, the following resources needed to built prematurely. You can build them manually, or use 
 the terraform files (build dns_attack_server and ntp_multi_attack_server, stop and install what needs to be installed, then build dhcp_settings)
 #####VPC #1
 - **DNS Server** :
@@ -78,7 +79,7 @@ the terraform files (build dns_attack_server and ntp_multi_attack_server, stop a
     ```
     where the optional arguments are as follows:
     - *-h, --help*  show this help message and exit
-    - *-c* the path for json of ntpd configuration (overides all other params)
+    - *-c* the path for json of ntpd configuration (overrides  all other params)
     - *-o --output_path* path output directory (default="./")
     - *-r --read_state_interval* is the interval between reading ntpd state
     - *-Z --zone_pools_path* is the url per state (default='zone_pools.json')
