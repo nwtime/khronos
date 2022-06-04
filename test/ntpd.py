@@ -31,7 +31,7 @@ else:
 
 QUERY_SERVERS = []
 SERVERS_POOL = []
-STATE_PATH = 'current_s.json'
+STATE_PATH = '../current_s.json'
 # to do:
 # change the configuration file: /etc/ntp.conf
 # find how to run on th estate machine

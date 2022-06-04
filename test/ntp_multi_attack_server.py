@@ -305,17 +305,15 @@ class WorkThread(threading.Thread):
                 break
             try:
                 data, addr, sid, recvTimestamp = taskQueue.get(timeout=1)
-                # neta - why do we need timeout?
                 recvPacket = NTPPacket()
                 recvPacket.from_data(data)
                 time_shift = self.get_time_shift(t=recvTimestamp- NTP.NTP_DELTA)
                 # recvTimestamp = the time when we opened the socket, NTP.NTP_DELTA = the current computer time
                 timeStamp_high, timeStamp_low = recvPacket.GetTxTimeStamp()
-                # neta - what is it the "high" and "low"?
                 sendPacket = self.create_send_packet(**self.packet_params)
 
                 sendPacket.ref_timestamp = recvTimestamp - 5
-                # neta - updeting the ref_timestamp to the time where the socket was opened - 5?
+                # verify -5
                 sendPacket.SetOriginTimeStamp(timeStamp_high, timeStamp_low)
                 sendPacket.recv_timestamp = recvTimestamp + time_shift
                 now = time.time()

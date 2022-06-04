@@ -1,6 +1,6 @@
 import os
 import sys
-my_ntplib_path = './my_ntplib.py'
+my_ntplib_path = 'my_ntplib.py'
 sys.path.append(os.path.abspath(my_ntplib_path))
 
 
@@ -83,11 +83,11 @@ if __name__ == "__main__":
     truth = float(sys.argv[7])
 
     servers_pool = json.load(open('chronos_servers_pool.json'))   # [ip1, ip2..]
-    current_S = json.load(open('current_s.json'))  # [idx1, idx2..]
+    current_S = json.load(open('../../current_s.json'))  # [idx1, idx2..]
     # if update, S is drawn again from the pool and saved for next rounds, else it's the previously chosen S
     if update:
         S = random.sample(range(len(servers_pool)), m)
-        with open('current_s.json', 'w') as f:
+        with open('../../current_s.json', 'w') as f:
             f.write(json.dumps(S))
     else:
         S = current_S
