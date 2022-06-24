@@ -31,8 +31,10 @@ double getIPv4Offset() {
         return 0;
     }
     if (fgets(output, sizeof(output), fp) != NULL) {
+        printf("\n%s\n", output);
         fgets(output, sizeof(output), fp);
         while (fgets(output, sizeof(output), fp) != NULL) {
+            printf("\n%s\n",output);
             if (output[0] != '*')
                 continue;
             sscanf(output, "%s%[: .:]%s%[: .:]%d%[: .:]%s%[: .:]%d%[: .:]%d%[: .:]%d%[: .:]%lf%[: .:]%lf%[: .:]%lf",
@@ -71,9 +73,12 @@ int read_config_watchdog(double* chronosDivert, int* deltaChronos, int* deltaNTP
 
 void clock_update(double offset) {
     char command[100] = {0};
-    if (fabs(offset) < 0.0001) {
-        offset = 0.0001;
+    if (fabs(offset) < 0.1) {
+//        offset = 0.0001;
+        return;
     }
+    popen("sudo timedatectl set-ntp 0", "r");
+    sleep(5);
     if (offset >= 0) {
         sprintf(command, "sudo timedatectl set-time '+%f'\n", offset);
     } else {
@@ -81,13 +86,14 @@ void clock_update(double offset) {
     }
     printf("command = %s\n", command);
     popen(command, "r");
+//    popen("sudo timedatectl set-ntp 1", "r");
 }
 
 
 int main(int argc, char* argv[]) {
     // config_file: [chronosDivert] [deltaChronos] [deltaNTP]
     // timedatectl set-ntp 0
-    popen("sudo timedatectl set-ntp 0", "r");
+//    popen("sudo timedatectl set-ntp 0", "r");
     time_t now;
     time(&now);
     strcat(log_file, strtok(ctime(&now), "\n"));
@@ -115,8 +121,8 @@ int main(int argc, char* argv[]) {
     logger("strating watchdog process", log_file);
     while (time_diff(starting_time, cur_time) < (totalTime * 60)) {
         gettimeofday(&iteration_starting_time, NULL);
-        naiveOffset = getIPv4Offset();
-        clock_update(naiveOffset);
+ //       naiveOffset = getIPv4Offset();
+//        clock_update(naiveOffset);
         if (iterations % deltaChronos == 0) {
             logger("starting chronos iteration", log_file);
             chronosOffset = chronos_main();
@@ -126,7 +132,7 @@ int main(int argc, char* argv[]) {
             printf("chronos_offset = %f\n", chronosOffset);
             if (fabs(chronosOffset - naiveOffset) > chronosDivert) {
                 logger("taking chronos time", log_file);
-                clock_update(chronosOffset);
+//                clock_update(chronosOffset);
                 printf("taking chronos time\n");
             }
         }
@@ -138,7 +144,7 @@ int main(int argc, char* argv[]) {
             sleep(to_sleep);
         gettimeofday(&cur_time, NULL);
     }
-    popen("sudo timedatectl set-ntp 1", "r");
+  //  popen("sudo timedatectl set-ntp 1", "r");
     return 0;
 }
 

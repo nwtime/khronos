@@ -49,14 +49,12 @@ void get_ip(int ips_found, int to_replace, int rest_to_find, int max_time, struc
     while ((time_diff(start, cur_time) < max_time) && (rest_to_find > 0)) {
         for (int i = 0; i < NUM_URLS; i++) {
             is_unique = 1;
-
             // get the ip of the current url:
             hp = gethostbyname(zone_urls[i]);
             if (!hp)
                 continue;
             ip_addr = *(struct in_addr *) (hp->h_addr);
             cur_ip = inet_ntoa(ip_addr);
-
             // check if it is already exist:
             for (int j = 0; j < ips_found; j++) {
                 if (strcmp(cur_ip, ips_pool[j]) == 0) {

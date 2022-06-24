@@ -13,9 +13,9 @@ char** ips_pool;
  */
 void calibration(int pool_size, int max_time_secs, char** zone_urls) {
     allocate_ips_pool(pool_size, &ips_pool);
-
     struct timeval start;
     gettimeofday(&start, NULL);
+    printf("SSS\n");
     get_ip(0, 0, pool_size, max_time_secs, start, ips_pool, zone_urls);
 }
 

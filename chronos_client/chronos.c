@@ -59,12 +59,12 @@ double calculate_average(int start, int end) {
  * @return 1 on success, 0 on failure
  */
 double send_query(char ip[], int index) {
-//    printf("send query to ip: %s\n", ip);
+        printf("send query to ip: %s\n", ip);
 	FILE *fp;
 	char output[1035];
 	char command[1000] = {0};
 	snprintf(command, sizeof(command), "ntpdate -q %s", ip);
-
+	printf("%s\n", command);
 	// Open the command for reading.
 	fp = popen(command, "r");  //todo: disable print if ip is not valid
 	if (fp == NULL) {
@@ -108,8 +108,8 @@ void load_pool(char* filename, int n) {
 		strcpy(ips_pool[counter], line);
 		counter++;
 	}
-//    printf("count = %d\n", counter);
-//    for (int i = 0; i < n; i++) printf("%s\n", ips_pool[i]);
+    printf("count = %d\n", counter);
+    for (int i = 0; i < n; i++) printf("%s\n", ips_pool[i]);
 }
 
 /**
@@ -219,6 +219,7 @@ double chronos_main() {
 	if (!read_config(&m, &d, &w, &drift, &k, &d_chronos, &pool_size, &truth))
 		exit(EXIT_FAILURE);
 	load_pool("./chronos_test_pool.txt", pool_size);
+	printf("pool size = %d\n", pool_size);
 	double offset = chronos(m, d, w, (drift * d_chronos) / 1000, k, truth, pool_size);
 	free_memory(m, 1, pool_size, ips_pool, times);
 //    printf("chronos offset:\n%lf\n" , offset);

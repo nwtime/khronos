@@ -40,8 +40,12 @@ double getIPv4Offset() {
         return 0;
     }
     if (fgets(output, sizeof(output), fp) != NULL) {
+	logger(output, log_file);
+	printf("\n%s\n",output);
         fgets(output, sizeof(output), fp);
         while (fgets(output, sizeof(output), fp) != NULL) {
+	    logger(output, log_file);
+	    printf("\n%s\n",output);
             if (output[0] != '*')
                 continue;
             sscanf(output, "%s%[: .:]%s%[: .:]%d%[: .:]%s%[: .:]%d%[: .:]%d%[: .:]%d%[: .:]%lf%[: .:]%lf%[: .:]%lf",
@@ -79,20 +83,25 @@ int read_config_naive(int* deltaNTP) {
 
 void clock_update(double offset) {
     char command[100] = {0};
-//    if (fabs(offset) < 0.1) {
-//        return;
-//    }
+    if (fabs(offset) < 0.1) {
+        return;
+    }
+    printf("\n%s\n","update clock");
+    printf("\n%f\n",offset);
+//    popen("sudo timedatectl set-ntp 0", "r");
+    sleep(5);
     if (offset >= 0) {
         sprintf(command, "timedatectl set-time '+%f'\n", offset);
     } else {
         sprintf(command, "timedatectl set-time '%f ago'\n", -offset);
     }
     popen(command, "r");
+//    popen("sudo timedatectl set-ntp 1","r");
 }
 
 int main(int argc, char* argv[]) {
     // config_file: [deltaNTP]
-    popen("timedatectl set-ntp 0", "r");
+//    popen("timedatectl set-ntp 0", "r");
     time_t now;
     time(&now);
     strcat(log_file, ctime(&now));
@@ -124,6 +133,6 @@ int main(int argc, char* argv[]) {
             sleep(to_sleep);
         gettimeofday(&cur_time, NULL);
     }
-    popen("timedatectl set-ntp 1", "r");
+  //  popen("timedatectl set-ntp 1", "r");
     return 0;
 }
