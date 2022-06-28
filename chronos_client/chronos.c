@@ -7,20 +7,11 @@
 #include "chronos.h"
 #include "tools.h"
 
-#define MAX_LEN_IP 100  //todo: ?
+#define MAX_LEN_IP 100
 
-//int pool_size;// = 50; // todo: get it as a parameter
 char** ips_pool;
-//c_time** times;
 double* times;
 
-//c_time* allocate_ctime(double offset, int stratum) {
-//    c_time* time = malloc(sizeof(c_time));
-//    if (time == NULL) return NULL;
-//    time->offset = offset;
-//    time->stratum = stratum;
-//    return time;
-//}
 
 /**
  * Compares between 2 elements (used in the qsort function).
@@ -43,41 +34,42 @@ int comp(const void * elem1, const void * elem2) {
  */
 double calculate_average(int start, int end) {
 	double sum = 0;
-//    printf("after bi-sided-trim:\n");
 	for (int i = start; i < end; i++) {
 		sum += times[i];
-//        printf("%lf\n", times[i]);
 	}
-//    printf("--------------------\n");
 	return sum / (end - start);
 }
 
 /**
  * Sends query to the given ip address.
  * @param ip - ip address to query
- * @param offset - variable to hold the offset we got from the query
+ * @param index - the index of the "times" array in which the offset will be stored
  * @return 1 on success, 0 on failure
  */
 double send_query(char ip[], int index) {
-        printf("send query to ip: %s\n", ip);
 	FILE *fp;
 	char output[1035];
 	char command[1000] = {0};
+
+	// concatenate the ip to the "ntpdate" command
 	snprintf(command, sizeof(command), "ntpdate -q %s", ip);
-	printf("%s\n", command);
+
 	// Open the command for reading.
-	fp = popen(command, "r");  //todo: disable print if ip is not valid
+	fp = popen(command, "r");
 	if (fp == NULL) {
 		return 0;
 	}
-	char server[100] = {0};
+
+	char server[MAX_LEN_IP] = {0};
 	int result, stratum;
 	double delay, offset;
+
 	// Read the output a line at a time - output it.
 	while (fgets(output, sizeof(output), fp) != NULL) {
 		result = sscanf(output, "server %[:0-9.:], stratum %d, offset %lf, delay %lf", server, &stratum, &offset, &delay);
-		if (result == 4) {
+		if (result == 4) { // the line matched the required format
 			if (stratum == 0 && offset == 0 && delay == 0) {
+				// error connecting to this server - then exit
 				pclose(fp);
 				return 0;
 			}
@@ -91,31 +83,44 @@ double send_query(char ip[], int index) {
 	return 0;
 }
 
-void load_pool(char* filename, int n) {
-	allocate_ips_pool(n, &ips_pool);
+/**
+ * Loads the pool of ips (that was generated during the "calibration" stage)
+ * @param filename - path to the file contains the ips pool
+ * @param n - number of ips in the pool
+ */
+void load_pool(char* filename, int* n) {
 	FILE* fp;
-	fp = fopen(filename, "r");
-	if (fp == NULL) {
-		free_memory(0, 0, n, ips_pool, times);
-		return;
-	}
-
 	char* line = NULL;
 	size_t len = 0;
 	int counter = 0;
-	while ((getline(&line, &len, fp)) != -1) {
-		strtok(line, "\n");
-		strcpy(ips_pool[counter], line);
-		counter++;
+
+	// count the lines in the file
+	fp = fopen(filename, "r");
+	if (fp == NULL) {
+		free_ips_pool(counter, ips_pool);
+		return;
 	}
-    printf("count = %d\n", counter);
-    for (int i = 0; i < n; i++) printf("%s\n", ips_pool[i]);
+	while ((getline(&line, &len, fp)) != -1)
+		counter++;
+	fclose(fp);
+
+	// update the pool_size
+	*n = counter;
+
+	allocate_ips_pool(counter, &ips_pool);
+	// read the ips into "ips_pool"
+	fp = fopen(filename, "r");
+	for (int i = 0; i < counter; i++) {
+		getline(&line, &len, fp);
+		strtok(line, "\n");
+		strcpy(ips_pool[i], line);
+	}
+	fclose(fp);
 }
 
 /**
- * This function samples m servers from the servers_pool and gets their offsets.
+ * Samples m random servers from the servers pool and gets their offsets.
  * @param m - number of servers to be sampled
- * @return
  */
 void sample(int m, int pool_size) {
 	int chosen[pool_size];
@@ -131,7 +136,7 @@ void sample(int m, int pool_size) {
 		random_index = rand() % pool_size;
 		if (chosen[random_index])
 			continue;
-		while (!send_query(ips_pool[random_index], counter) && chosen_counter < pool_size) { // todo: check if needed
+		while (!send_query(ips_pool[random_index], counter) && chosen_counter < pool_size) {
 			// try another index
 			chosen[random_index] = 1;
 			random_index = rand() % pool_size;
@@ -147,7 +152,7 @@ void sample(int m, int pool_size) {
 }
 
 /**
- * Apply the Chronos algorithm
+ * Applies the Chronos algorithm
  * @param m - number of servers chosen at random from the server pool
  * @param d - number of outliers removed from each end of the ordered m samples
  * @param w - an upper bound on the distance from the UTC of the local time
@@ -164,7 +169,7 @@ double chronos(int m, double d, double w, double err, int k, double truth, int p
 	double avg;
 	times = malloc(m * sizeof(double));
 	if (times == NULL) {
-		free_memory(0, 0, pool_size, ips_pool, times);
+		free_ips_pool(pool_size, ips_pool);
 		exit(EXIT_FAILURE);
 	}
 	int partition = (int) (d * m);
@@ -186,43 +191,55 @@ double chronos(int m, double d, double w, double err, int k, double truth, int p
 	return calculate_average(pool_size/3, (2 * pool_size) / 3);
 }
 
+/**
+ * Reads the configuration file and loads its content into the variables
+ * @return 1 on success, 0 on failure
+ */
 int read_config(int* m, double* d, double* w, double* drift, int* k,
-				int* d_chronos, int* pool_size, double* truth) {
-	FILE* fp;
-	FILE* fp2;
+				int* d_chronos, double* truth) {
+	FILE* config_file;
+	FILE* truth_file;
 	char* line = NULL;
 	size_t len = 0;
 
-	fp = fopen("./chronos_config.txt", "r");
-	if (fp == NULL)
+	config_file = fopen("./chronos_config.txt", "r");
+	if (config_file == NULL)
 		return 0;
 
-	getline(&line, &len, fp);
+	getline(&line, &len, config_file);
 
-	sscanf(line, "%d %lf %d %lf %lf %d %d", m, d, k, w, drift, d_chronos, pool_size);
-	fclose(fp);
+	sscanf(line, "%d %lf %d %lf %lf %d", m, d, k, w, drift, d_chronos);
+	fclose(config_file);
 
-	fp2 = fopen("./chronos_truth.txt", "r");
-	if (fp2 == NULL)
+	truth_file = fopen("./chronos_truth.txt", "r");
+	if (truth_file == NULL)
 		return 0;
 
-	getline(&line, &len, fp2);
+	getline(&line, &len, truth_file);
 
 	sscanf(line, "%lf", truth);
-	fclose(fp2);
+	fclose(truth_file);
 	return 1;
 }
 
+/**
+ * Reads the parameters and runs the Chronos algorithm
+ * @return Chronos offset
+ */
 double chronos_main() {
 	int m, k, d_chronos, pool_size;
 	double d, w, drift, truth;
-	if (!read_config(&m, &d, &w, &drift, &k, &d_chronos, &pool_size, &truth))
+	if (!read_config(&m, &d, &w, &drift, &k, &d_chronos, &truth))
 		exit(EXIT_FAILURE);
-	load_pool("./chronos_test_pool.txt", pool_size);
-	printf("pool size = %d\n", pool_size);
+	load_pool("./chronos_test_pool.txt", &pool_size);
 	double offset = chronos(m, d, w, (drift * d_chronos) / 1000, k, truth, pool_size);
-	free_memory(m, 1, pool_size, ips_pool, times);
-//    printf("chronos offset:\n%lf\n" , offset);
+	free_ips_pool(pool_size, ips_pool);
+	free(times);
+
+	FILE *out = fopen("./chronos_truth.txt", "w");
+	fprintf(out, "%f", offset);
+	fclose(out);
+
 	return offset;
 }
 

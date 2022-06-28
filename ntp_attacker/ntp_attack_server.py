@@ -282,7 +282,7 @@ class WorkThread(threading.Thread):
         if self.shift_type == 'CONSTANT':
             return self.c_shift
         time_shift = (self.slop * (t - self.slop_t_0)) if t > self.slop_t_0 else 0
-        print(time_shift)
+        # print(time_shift)
         return time_shift
 
     def create_send_packet(self, version=3, mode=4, stratum=1, poll=10):

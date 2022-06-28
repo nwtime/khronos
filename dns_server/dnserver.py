@@ -107,7 +107,6 @@ class BadResolver(ProxyResolver):
                 return dns.A(new_ip)
             else:
                 t = random.random()
-                print(f"{t} < {self.bad_probability} ???????????????????????")
                 if t < self.bad_probability:
                     ip_index = random.randrange(0, len(self.bad_ip_pool))
                     new_ip = self.bad_ip_pool[ip_index]
@@ -123,9 +122,7 @@ class BadResolver(ProxyResolver):
                         self.update_ip_file()
                         print( ">>> %s new, added to good ips" % (ip, ))
                         return rdata
-                    print(self.ips["good"])
                     ip_index = random.randrange(0, len(self.ips["good"]))
-                    print(self.ips["good"])
 #                    new_ip = random.choice(self.ips["good"].keys()[ip_index])
                     new_ip = list(self.ips["good"].keys())[ip_index]
                     print( ">>> %s new, replaced with good %s" % (ip, new_ip))
@@ -178,7 +175,7 @@ if __name__ == '__main__':
                         help="upstream DNS server")
     parser.add_argument("-i", "--ips_state_file", default='ips.json',
                         help="current ips state file path")
-    parser.add_argument("-b", "--bad_server_pool", default='bad_ips_pool3.json',
+    parser.add_argument("-b", "--bad_server_pool", default='bad_ips_pool.json',
                         help="path for bad server pool")
     parser.add_argument("-r", "--bad_probability", type=float, default=0.8,
                         help="bad server ratio")

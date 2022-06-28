@@ -12,30 +12,18 @@
 #include <time.h>
 #include <sys/time.h>
 
-typedef struct {
-    double offset;
-    int stratum;
-} c_time;
 
 int comp(const void * elem1, const void * elem2);
 
 double calculate_average(int start, int end);
 
-//double time_diff(struct timeval tv1, struct timeval tv2);
-
 double send_query(char ip[], int index);
 
-void calibration(int n, int max_time_secs);
-
 void sample(int m, int pool_size);
-
-//void free_memory(int m, int free_times);
 
 double chronos(int m, double d, double w, double err, int k, double truth, int pool_size);
 
 double chronos_main();
-
-//float foo();
 
 //const char* zone_urls[] =
 //// "global":

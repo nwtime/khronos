@@ -1,17 +1,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
-#include "tools.h"
-#include "chronos.h"
+#include <math.h>
+#include <time.h>
+#include <string.h>
+#include <unistd.h>
 #include "logger.h"
 
 char log_file[100] = "./watchdog_logger";
 
-// Example for "ntpq -p" output:
-//
-//       remote           refid      st t when poll reach   delay   offset  jitter
-//  *julkinen.dclabr 193.166.5.217    2 u    5    8  377  118.639   +0.333  10.322
-
+/**
+ * Calculates the difference between the two given times in seconds.
+ */
+double time_diff(struct timeval tv1, struct timeval tv2) {
+	return fabs((double) (tv2.tv_usec - tv1.tv_usec) / 1000000 + (double) (tv2.tv_sec - tv1.tv_sec));
+}
 
 /**
  * runs the "ntpq -p" command and parse its output to get the offset of the peer that
@@ -60,25 +63,24 @@ double getNTPv4Offset() {
 }
 
 /**
- * Reads the configuration file and insert the values into variables
+ * Reads the configuration file and insert the value into variable
  * @return 1 on success, 0 on failure
  */
-int read_config_watchdog(double* chronosDivert, int* deltaChronos, int* deltaNTPint) {
+int read_config_naive(int* deltaNTP) {
 	FILE *fp;
 	char *line = NULL;
 	size_t len = 0;
 
-	fp = fopen("./watchdog_config.txt", "r");
+	fp = fopen("./naive_config.txt", "r");
 	if (fp == NULL)
 		return 0;
 
 	getline(&line, &len, fp);
 
-	sscanf(line, "%lf %d %d", chronosDivert, deltaChronos, deltaNTPint);
+	sscanf(line, "%d", deltaNTP);
 	fclose(fp);
 	return 1;
 }
-
 
 /**
  * Updates the local clock using the "timedatectl set-time" command
@@ -99,13 +101,10 @@ void clock_update(double offset) {
 }
 
 /**
- * Runs the watchdog process:
- *  - takes the offset of NTPv4 every "deltaNTP" minutes, and updates the clock accordingly
- *  - takes the offset of Chronos every "deltaChronos" iterations
- *  - if |Chronos_offset - NTPv4_offset| > ChronosDivert:
- *      updates the clock using Chronos_offset
+ * Runs the NTP process:
+ * takes the offset of NTPv4 every "deltaNTP" minutes, and updates the clock accordingly
  */
-void watchdog_process(double chronosDivert, int deltaChronos, int deltaNTP, int totalTime) {
+void naive_process(int deltaNTP, int totalTime) {
 	logger("starting watchdog process", log_file);
 	struct timeval starting_time;
 	struct timeval cur_time;
@@ -115,28 +114,10 @@ void watchdog_process(double chronosDivert, int deltaChronos, int deltaNTP, int 
 	gettimeofday(&cur_time, NULL);
 
 	double naiveOffset = 0;
-	double chronosOffset = 0;
-	int iterations = 0;
 	while (time_diff(starting_time, cur_time) < (totalTime * 60)) {
 		gettimeofday(&iteration_starting_time, NULL);
 		naiveOffset = getNTPv4Offset();
 //        clock_update(naiveOffset);
-		if (iterations % deltaChronos == 0) {
-			logger("starting chronos iteration", log_file);
-			chronosOffset = chronos_main();
-
-			char log_msg[1000] = {0};
-			snprintf(log_msg, sizeof(log_msg), "finished chronos iteration. offset = %f", chronosOffset);
-			logger(log_msg, log_file);
-			printf("chronos_offset = %f\n", chronosOffset);
-
-			if (fabs(chronosOffset - naiveOffset) > chronosDivert) {
-				logger("taking chronos time", log_file);
-//                clock_update(chronosOffset);
-				printf("taking chronos time\n");
-			}
-		}
-		iterations = (iterations + 1) % deltaChronos;
 		gettimeofday(&cur_time, NULL);
 		double time_taken = time_diff(iteration_starting_time, cur_time);
 		int to_sleep = (int) (deltaNTP * 60 - time_taken);
@@ -146,28 +127,27 @@ void watchdog_process(double chronosDivert, int deltaChronos, int deltaNTP, int 
 	}
 }
 
-
 int main(int argc, char* argv[]) {
-//    config_file: [chronosDivert] [deltaChronos] [deltaNTP]
-//    input parameter: total_time (minutes)
+	//  config_file: [deltaNTP]
+	//  input parameter: total_time (minutes)
 
 //    popen("sudo timedatectl set-ntp 0", "r");
 
 	// create a log file
 	time_t now;
 	time(&now);
-	strcat(log_file, strtok(ctime(&now), "\n"));
+	strcat(log_file, ctime(&now));
 	strcat(log_file, ".log");
 
-	double chronosDivert;
-	int deltaChronos, deltaNTP;
-	if (!read_config_watchdog(&chronosDivert, &deltaChronos, &deltaNTP)) {
+	int deltaNTP;
+	if (!read_config_naive(&deltaNTP)) {
 		logger("config file error", log_file);
 		exit(EXIT_FAILURE);
 	}
+
 	char* ptr;
 	int totalTime = (int) strtol(argv[1], &ptr, 10); // in minutes
 
-	watchdog_process(chronosDivert, deltaChronos, deltaNTP, totalTime);
-//    popen("sudo timedatectl set-ntp 1", "r");
+	naive_process(deltaNTP, totalTime);
+//    popen("timedatectl set-ntp 1", "r");
 }
