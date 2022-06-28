@@ -1,75 +1,88 @@
-# Chronos NTP protected client – test environment guide 
+# Chronos - protected NTP client - Test Environment Guide 
 
-## Target –
-Simulate NTP naïve client VS Chronos client, under man in the middle attack 
+## Target
+Simulate NTP naïve client VS Chronos client, under Man-in-the-Middle attack 
 
-## Overview -
-In our test environment program, we have 4 machines 
-Naïve Client – basic NTP client 
-Chronos Client – basic NTp client with the Chronos as watch dog 
-Malicious server – attacker with two attack option: constant and cumulative
-DNS server
+## Overview
+In our test environment, we have 4 machines:
+* Naïve Client – basic NTP client 
+* Chronos Client – basic NTP client with Chronos as a watchdog 
+* Malicious server – attacker with two attack strategies: constant-shift and cumulative-shift
+* DNS server
 
-## Architecture -
+## Architecture
 
-![image](https://user-images.githubusercontent.com/84452715/175526803-b7b906bd-9932-4959-8325-2d1763d9cc15.png)
+![image](https://user-images.githubusercontent.com/84453420/176244989-e847d9a8-f906-433c-8afa-f3a9c784d3f3.png)
 
  
 
-## Setup –
+## Setup
 
 ### VPC #1
-DNS Server :
-Port 53 opened for incoming traffic
-Python 3 installed, dnslib installed (globally)
+ * DNS Server:
+   - Port 53 opened for incoming traffic
+   - Python 3 installed, dnslib installed (globally)
 
-NTP Attacker (ubuntu Linux):
-Multiple network interfaces with multiple IPs
-All traffic open on 0.0.0.0/0
-Python 3 installed.
+ * NTP Attacker (ubuntu):
+   - Multiple network interfaces with multiple IPs
+   - All traffic open on 0.0.0.0/0
+   - Python 3 installed
 
 ### VPC #2
-DHCP configuration DHCP options set for this VPC configured with the DNS Server vm's IP as it's DNS server. Notice you might need to reboot the vm's for this change to take place quickly.
-Chronos client (ubuntu)
-Naïve client (ubuntu)
+**DHCP configuration:** DHCP options set for this VPC configured with the DNS Server VM's IP as its DNS server.\
+Notice you might need to reboot the VM's for this change to take place quickly.
 
-## configuration
+ * Chronos client (ubuntu):
+   - ntpd installed
+ * Naïve client (ubuntu)
+   - ntpd installed 
+
+## Configuration Files
 ### Chronos Client:
-  - chronos_config.txt -  chronos algorithm configuration. (fields: m, d, k, w, drift, d_chronos, pool_size)
-  - watchdog_config.txt - chronos watch dog configuration. (fields: chronosDivert, deltaChronos, deltaNTP)
+  - chronos_config.txt -  chronos algorithm configuration. (Fields: m, d, k, w, drift, d_chronos, pool_size)
+  - watchdog_config.txt - chronos watchdog configuration. (Fields: chronosDivert, deltaChronos, deltaNTP)
 ### Naïve Client:
-  - naive_config.txt - naive client configuration.  (fields: delta NTP)
+  - naive_config.txt - naive client configuration. (Fields: deltaNTP)
 
 
-## Calibration –
-Before you start notice your Chronos calibration pool is legit (in the range of two weeks for the last time activated), if not go to Chronos machine and Start calibration stage by 
+## Calibration
+Before you start, notice your Chronos calibration pool is legit (in the range of two weeks for the last time activated). If not- go to Chronos machine and start calibration stage by:
 ```
 gcc calibration.c tools.c -o calibration
 ./calibration [zone] [poolsize] [timelimit]
 ```
-## Operate – 
-The first step Is to activate the DNS server with wanted attack ratio
+## Operate
+The first step is to activate the DNS server with a wanted attack ratio
 
 ```
-#p=[listening port], -u=[upstream DNS server], -i=[current ips state file path], -b=[path for bad server pool], -r=[bad server ratio], -P=[upsrteam DNS server port], [-d]
-
 sudo python3 dnsserver.py [optional]
 ```
-The second step in to activate the malicious server
+
+when the optional parameters are:
+```
+-p=[listening port],
+-u=[upstream DNS server],
+-i=[current ips state file path],
+-b=[path for bad server pool],
+-r=[bad server ratio],
+-P=[upsrteam DNS server port],
+[-d]
+```
+The second step is to activate the malicious server
 ```
 sudo python3 ntp_attack_server.py [shift type] [c_shift] [slop_t] [slop] [interfaces file]
 ```
-The third stage in to activate the naïve client 
+The third step is to activate the naïve client
 ```
 gcc naive_client.c logger.c -o naiveC
 ./naiveC [time (minutes)]
 ```
-The forth stage is to activate the Chronos client  
+The fourth step is to activate the Chronos client
 ```
 gcc chronos_watchdog.c logger.c tools.c chronos.c -o chronosC
 ./chronosC [time (minutes)]
 ```
-## example -
+## Example
 DNS
 ```
 sudo python3 dnsserver.py -r=0.2
@@ -88,4 +101,4 @@ CHRONOS
 gcc chronos_watchdog.c logger.c tools.c chronos.c -o chronosC
 ./chronosC 150
 ```
-# thanks :robot:
+# Thanks :robot:
