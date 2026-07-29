@@ -42,45 +42,45 @@ def get_naive_offset():
     return offset
 
 
-def get_chronos_offset(update_flag, prev_chronos_offset):
+def get_khronos_offset(update_flag, prev_khronos_offset):
     """
-    Send an NTP request from the chronos client to the region's ntp host, return the offset.
-    The Query is sent using the script found in the remote chronos client machine.
-    USAGE chronos_client.py [m] [d] [k] [w] [err] [attack_prob] [truth] [optional: update] [optional: smooth]
+    Send an NTP request from the khronos client to the region's ntp host, return the offset.
+    The Query is sent using the script found in the remote khronos client machine.
+    USAGE khronos_client.py [m] [d] [k] [w] [err] [attack_prob] [truth] [optional: update] [optional: smooth]
     [attack_prob] [truth] [optional: update]
-    notice truth is prev_chronos_offset
+    notice truth is prev_khronos_offset
     :return: offset
     rtype: float
     """
     update = '-u' if update_flag else ''
-    m = chronos_params.get('m', Consts.DEFAULT_M)
-    d = chronos_params.get('d', Consts.DEFAULT_D)
-    k = chronos_params.get('k', Consts.DEFAULT_K)
-    w = chronos_params.get('w', Consts.DEFAULT_W)
-    err = chronos_params.get('err', Consts.DEFAULT_ERR)
-    smooth = '-s' if chronos_params.get('smooth', Consts.DEFAULT_SMOOTH) else ''
-    return vm_manager.run_cmd_on_vm(host=chronos_host,
-                                    cmd=f'python chronos_client.py {m} {d} {k} {w} {err}'
-                                        f'{prev_chronos_offset} {update} {smooth}',
+    m = khronos_params.get('m', Consts.DEFAULT_M)
+    d = khronos_params.get('d', Consts.DEFAULT_D)
+    k = khronos_params.get('k', Consts.DEFAULT_K)
+    w = khronos_params.get('w', Consts.DEFAULT_W)
+    err = khronos_params.get('err', Consts.DEFAULT_ERR)
+    smooth = '-s' if khronos_params.get('smooth', Consts.DEFAULT_SMOOTH) else ''
+    return vm_manager.run_cmd_on_vm(host=khronos_host,
+                                    cmd=f'python khronos_client.py {m} {d} {k} {w} {err}'
+                                        f'{prev_khronos_offset} {update} {smooth}',
                                     key=key_file_path)
 
 
 def create_bad_server_configuration(ntp_attacker_ips):
     """
-    given the good servers pool written in chronos_servers_pool.json, create the bad servers configuration by replacing
+    given the good servers pool written in khronos_servers_pool.json, create the bad servers configuration by replacing
     a portion of them in one of the adversary ips. the portion is determined by the given attack ratio parameter in the
     config file.
-    Write the mapping to the bad servers json (meant for chronos machine) and zones text file (meant for the dns)
+    Write the mapping to the bad servers json (meant for khronos machine) and zones text file (meant for the dns)
     """
-    idx_to_replace = random.sample(range(len(chronos_servers_pool)), num_attackers)
+    idx_to_replace = random.sample(range(len(khronos_servers_pool)), num_attackers)
     new_pool = {}
     adversary_idx = 0
-    for i, ip in enumerate(chronos_servers_pool):
+    for i, ip in enumerate(khronos_servers_pool):
         if i in idx_to_replace:
             new_pool[ip] = ntp_attacker_ips[adversary_idx]
             adversary_idx += 1
         else:
-            new_pool[ip] = chronos_servers_pool[i]
+            new_pool[ip] = khronos_servers_pool[i]
     with open(Consts.bad_servers_path, 'w') as bad_servers_f:
         bad_servers_f.write(json.dumps(new_pool))
     with open(Consts.zones_path, 'w') as zones_f:
@@ -90,20 +90,20 @@ def create_bad_server_configuration(ntp_attacker_ips):
 
 def create_good_servers_pool(calibrate):
     """
-    read the chronos_servers_pool file contents.
+    read the khronos_servers_pool file contents.
     Run calibration process again if one of the option holds:
     1. The file is empty
-    2. Calibration flag was passed on expereiment init
+    2. Calibration flag was passed on experiment init
     3. The pool's size is smaller than the N param given at experiment init
     :return: the pool as list of ips
     """
-    with open(Consts.chronos_pool_path, 'r') as pool_f:
+    with open(Consts.khronos_pool_path, 'r') as pool_f:
         pool = json.loads(pool_f.read())
     if not pool or calibrate or len(pool) < n:
         start = time.time()
         logger.info("Starting to calibrate servers pool.")
         pool = collect_ntp_servers(region, n=n)
-        with open(Consts.chronos_pool_path, 'w') as pool_f:
+        with open(Consts.khronos_pool_path, 'w') as pool_f:
             pool_f.write(json.dumps(pool))
         logger.info(f"Servers pool calibration complete, took {start - time.time()} seconds.")
     return pool
@@ -121,28 +121,28 @@ def get_aws_network_ids_for_region():
 
 def log_experiment():
     now = datetime.datetime.now().strftime("%Y-%m-%d_%H:%M")
-    logs_dir = str(Path(f"chronos_experiment_{now}").resolve())
+    logs_dir = str(Path(f"khronos_experiment_{now}").resolve())
     os.mkdir(logs_dir)
     with open(str(Path(logs_dir, 'logs.csv')), 'w') as log_file:
         writer = csv.writer(log_file)
-        params = [f"{key}={val}" for key, val in chronos_params.items()]
+        params = [f"{key}={val}" for key, val in khronos_params.items()]
         writer.writerow(params)
-        writer.writerow(('naive', 'chronos', 'panic', 'update'))
+        writer.writerow(('naive', 'khronos', 'panic', 'update'))
         for offset_pair in offsets:
             writer.writerow(offset_pair)
 
     fig = plt.figure()
     fig.add_subplot(111)
     naive_offsets = [a[0] for a in offsets]
-    chronos_offset = [a[1] for a in offsets]
+    khronos_offset = [a[1] for a in offsets]
     plt.plot(range(1, len(offsets)+1), naive_offsets)
-    plt.plot(range(1, len(offsets)+1), chronos_offset)
-    plt.legend(['Naive Client', 'Chronos Client'], loc='upper left')
-    plt.title(f"Chronos experiment - {now}")
+    plt.plot(range(1, len(offsets)+1), khronos_offset)
+    plt.legend(['Naive Client', 'Khronos Client'], loc='upper left')
+    plt.title(f"Khronos experiment - {now}")
     plt.xlabel("Queries")
     plt.ylabel("Offsets")
     plt.ylim([-0.2, 0.2])
-    plt.savefig(str(Path(logs_dir,f"chronos_offsets_{now}")))
+    plt.savefig(str(Path(logs_dir,f"khronos_offsets_{now}")))
 
 
 def automated_setup():
@@ -155,11 +155,11 @@ def automated_setup():
 
     logger.info("Started VM setup")
     ips = vm_manager.setup_all_vms(key_file_path, region, vpc_id, dns_subnet_id, clients_subnet_id, sg_id, num_attackers)
-    _chronos_host, _naive_host, _ntp_attacker_host, _dns_host = ips[1], ips[2], ips[3], ips[4]
+    _khronos_host, _naive_host, _ntp_attacker_host, _dns_host = ips[1], ips[2], ips[3], ips[4]
     logger.info("VMs are up")
 
     create_bad_server_configuration(ips[0])
-    vm_manager.load_vm_data(dns_host, chronos_host, ntp_attacker_host, key_file_path)
+    vm_manager.load_vm_data(dns_host, khronos_host, ntp_attacker_host, key_file_path)
     # TODO: ubuntu
     # apt-get update
     # apt-get install ntpd
@@ -169,41 +169,41 @@ def automated_setup():
     vm_manager.run_ntp_attacker(_ntp_attacker_host, shift_params, key_file_path)
 
     logger.info(f"All vms are up and ready to use, took {time.time() - start} seconds")
-    return _chronos_host, _naive_host
+    return _khronos_host, _naive_host
 
 
 def run_experiment():
     """
-    Run the chronos experiment!
-    Query the Chronos Client and the Naive Client for offsets.
+    Run the khronos experiment!
+    Query the Khronos Client and the Naive Client for offsets.
     Querying occurse every "query_interval" for "total_time" (params taken from config).
-    If chronos needs to be updated (every "update_interval" loops) update the relevant flags.
+    If khronos needs to be updated (every "update_interval" loops) update the relevant flags.
     Print the results (and timings) to the logger and return a list of offsets.
-    :return: List of tuples [(naive_offset,chronos_offset)] where every tuple is one query loop.
+    :return: List of tuples [(naive_offset,khronos_offset)] where every tuple is one query loop.
     """
     start_time = time.time()
     logger.info(f"Starting experiment at {datetime.datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S')}")
     update_counter = 0
     update_flag = True
     panic_flag = False
-    prev_chronos_offset = 0
+    prev_khronos_offset = 0
     offsets = []
     cur_time = time.time()
     while cur_time - start_time < total_time:
 
-        # check if chronos needs to update it's server's sample group
+        # check if khronos needs to update it's server's sample group
         if update_counter == update_interval:
             update_flag = True
             update_counter = 0
 
-        # get chronos offset (usually around 3s, can get to 35s if PANIC)
-        chronos_time = time.time()
-        chronos_offset = get_chronos_offset(update_flag, prev_chronos_offset)
-        if "PANIC" in chronos_offset:
-            chronos_offset = chronos_offset.split("\n")[1]
+        # get khronos offset (usually around 3s, can get to 35s if PANIC)
+        khronos_time = time.time()
+        khronos_offset = get_khronos_offset(update_flag, prev_khronos_offset)
+        if "PANIC" in khronos_offset:
+            khronos_offset = khronos_offset.split("\n")[1]
             panic_flag = True
-        chronos_offset = chronos_offset.strip("\n")
-        logger.info(f"chronos took {time.time() - chronos_time} secs " + (" | update" if update_flag else "") +
+        khronos_offset = khronos_offset.strip("\n")
+        logger.info(f"khronos took {time.time() - khronos_time} secs " + (" | update" if update_flag else "") +
                     (" | panic" if panic_flag else ""))
 
         # get naive offset (usually around 6s)
@@ -212,12 +212,12 @@ def run_experiment():
         logger.info(f"naive took {time.time() - naive_time} secs")
 
         # log and save results
-        logger.info(f"Queries succeed, Naive offset: {naive_client_offset}, Chronos offset: {chronos_offset}")
-        result = (naive_client_offset, chronos_offset, "panic" if panic_flag else "", "update" if update_flag else "")
+        logger.info(f"Queries succeed, Naive offset: {naive_client_offset}, Khronos offset: {khronos_offset}")
+        result = (naive_client_offset, khronos_offset, "panic" if panic_flag else "", "update" if update_flag else "")
         offsets.append(result)
 
         # wait for the remaining time of the query interval
-        took = time.time() - chronos_time
+        took = time.time() - khronos_time
         waiting_time = query_interval - took if query_interval - took > 0 else 0
         time.sleep(waiting_time)
 
@@ -225,7 +225,7 @@ def run_experiment():
         update_counter += 1
         update_flag = False
         panic_flag = False
-        prev_chronos_offset = chronos_offset.strip("\n")
+        prev_khronos_offset = khronos_offset.strip("\n")
         cur_time = time.time()
     return offsets
 
@@ -241,8 +241,8 @@ if __name__ == "__main__":
 
     key_file_path = sys.argv[2]
 
-    chronos_params = config.get('chronos_params')
-    n = chronos_params.get('n', Consts.DEFAULT_N)
+    khronos_params = config.get('khronos_params')
+    n = khronos_params.get('n', Consts.DEFAULT_N)
 
     attack_ratio = config.get('adversary_ratio', Consts.DEFAULT_X)
     num_attackers = int(attack_ratio * n)
@@ -262,8 +262,8 @@ if __name__ == "__main__":
     shift_params = config.get('shift_params')
     if not manual_setup:
         try:
-            chronos_servers_pool = create_good_servers_pool(calibrate)
-            chronos_host, naive_host = automated_setup()
+            khronos_servers_pool = create_good_servers_pool(calibrate)
+            khronos_host, naive_host = automated_setup()
         except BaseException as err:
             vm_manager.teardown_tf(num_attackers)
             logger.info(err)
@@ -274,16 +274,16 @@ if __name__ == "__main__":
             logger.info("ERROR: can't use -s for manual setup without specifying vm params in config")
             exit()
         dns_host = vm_params.get('dns_host')
-        chronos_host = vm_params.get('chronos_host')
+        khronos_host = vm_params.get('khronos_host')
         naive_host = vm_params.get('naive_host')
         ntp_attacker_host = vm_params.get('ntp_attacker_host')
         ntp_bad_ips = vm_params.get('ntp_private_ips')
         logger.info("No setup needed, taking host names from config file.")
         logger.info("WARNING: USE THIS OPTION CAREFULLY. For the experiment to run successfully the given hosts needed "
                     "to be set according to the experiment's prerequisites listed in README")
-        chronos_servers_pool = create_good_servers_pool(calibrate)
+        khronos_servers_pool = create_good_servers_pool(calibrate)
         create_bad_server_configuration(ntp_bad_ips)
-        vm_manager.load_vm_data(dns_host, chronos_host, ntp_attacker_host, key_file_path)
+        vm_manager.load_vm_data(dns_host, khronos_host, ntp_attacker_host, key_file_path)
         vm_manager.run_dns_server(dns_host, key_file_path, attack_ratio)
         vm_manager.run_ntp_attacker(ntp_attacker_host, shift_params, key_file_path)
 

@@ -1,17 +1,17 @@
-# Chronos NTP Client Project
-This projects provides a Chronos_d, a Chronos client which is used as a watchdog for improving NTPv4 client security against powerful attackers
-who are in direct control of a large number of NTP servers (see details in [Chronos paper](https://www.ndss-symposium.org/wp-content/uploads/2018/02/ndss2018_02A-2_Deutsch_paper.pdf) and in [Chronos IETF draft](https://datatracker.ietf.org/doc/draft-ietf-ntp-chronos/04/)).
+# Khronos NTP Client Project
+This projects provides a khronos_d, a Khronos client which is used as a watchdog for improving NTPv4 client security against powerful attackers
+who are in direct control of a large number of NTP servers (see details in [Khronos paper](https://www.ndss-symposium.org/wp-content/uploads/2018/02/ndss2018_02A-2_Deutsch_paper.pdf) and in [Khronos IETF RFC](https://datatracker.ietf.org/doc/rfc9523/)).
 
 Moreover, an end-to-end experiment environment is provided.
 
-This repository consists of two Chronos client implementations: (i) python implementation (in the master branch), and (ii) C implementation (in the ''final project'') branch. 
+This repository consists of two Khronos client implementations: (i) python implementation (in the master branch), and (ii) C implementation (in the ''final project'') branch. 
 Next, the python implementation is presented.
 
 # Usage
 
 Given a virtual env with the required packages installed (matplotlib, fabric), run:
 ```
-chronos_d.py [-h] [-m QUERY_SIZE] [-d FILTER_BOUNDS]
+khronos_d.py [-h] [-m QUERY_SIZE] [-d FILTER_BOUNDS]
                       [-k PANIC_THRESHOLD] [-w DISTANCE_THRESHOLD]
                       [-e LOCAL_ERROR_BOUND] [-u UPDATE_QUERY_INTERVAL]
                       [-q QUERY_INTERVAL] [-p SERVER_POOL_PATH] [-S STATE]
@@ -21,7 +21,7 @@ chronos_d.py [-h] [-m QUERY_SIZE] [-d FILTER_BOUNDS]
 ```
 For example:
 ```
-sudo python chronos_d.py -m 12 -d 0.34 -n 500 -M 36000 -C -z uk -p chronos_servers_pool_london.json -u 3600 -q 60
+sudo python khronos_d.py -m 12 -d 0.34 -n 500 -M 36000 -C -z uk -p khronos_servers_pool_london.json -u 3600 -q 60
 ```
 where the optional arguments are as follows:
 - *-h, --help*  show this help message and exit
@@ -33,13 +33,13 @@ where the optional arguments are as follows:
 - *-u UPDATE_QUERY_INTERVAL, --update_query_interval UPDATE_QUERY_INTERVAL* the time interval between choosing new m servers
 - *-q QUERY_INTERVAL, --query_interval QUERY_INTERVAL* the time interval between queries
  - *-p SERVER_POOL_PATH, --server_pool_path SERVER_POOL_PATH* the path for json of pool servers
- - *-S STATE, --state STATE* is the path for json of chronos state (last queried servers)
+ - *-S STATE, --state STATE* is the path for json of khronos state (last queried servers)
  - *-D, --dont_start_quick* don't start with full update (might lead to panic on first update)
- - *-c CONF_PATH, --conf_path CONF_PATH* the path for json of chronos configuration (overides all other params)
+ - *-c CONF_PATH, --conf_path CONF_PATH* the path for json of khronos configuration (overides all other params)
  - *-o OUTPUT_PATH, --output_path OUTPUT_PATH* the path output directory
 - *-n POOL_SIZE, --pool_size POOL_SIZE* the number of servers in the pool
 - *-Z ZONE_POOLS_PATH, --zone_pools_path ZONE_POOLS_PATH* url per state
-- *-z ZONE, --zone ZONE  zone for calibration (default:global) [global,europe,uk,usa,germany,syngapore,australia,japan,asia,south_ame
+- *-z ZONE, --zone ZONE  zone for calibration (default:global) [global,europe,uk,usa,germany,singapore,australia,japan,asia,south_ame
                         rica]*
 - *-C, --force_calibration* is used for force calibration (and generating pool file)
 - *-M MAX_CALIBRATION_TIME, --max_calibration_time MAX_CALIBRATION_TIME* the max calibration time (in seconds).
@@ -52,15 +52,15 @@ the terraform files (build dns_attack_server and ntp_multi_attack_server, stop a
 #####VPC #1
 - **DNS Server** :
     - Port 53 opened for incoming traffic
-    - Python 2.7 installed, dnslib installed (globally)  
+    - Python 3.x installed, dnslib installed (globally)  
 ##### VPC #2
 - **DHCP configuration** DHCP options set for this VPC configured with the DNS Server vm's IP as it's DNS server. Notice you might need to reboot the vm's for this change to take place quickly.
 - **NTP Attacker** (Amazon Linux)
     - Multiple network interfaces with multiple IPs
     - All traffic open on 0.0.0.0/0
     - Python 2.7 installed.
-- **Chronos_d** (centos or anything else)
-    - Python 2.7 installed.
+- **khronos_d** (centos or anything else)
+    - Python 3.x installed.
 - **NTPd** (ubuntu)
     - run:
     ```

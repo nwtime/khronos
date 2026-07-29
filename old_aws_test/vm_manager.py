@@ -49,7 +49,7 @@ def install_python36_centos(hostname, key, pip=False):
 
 def install_python3_amazon_linux(hostname, key, pip=False):
     """
-    required for ntp_attacker and chronos_client vms
+    required for ntp_attacker and khronos_client vms
     :param hostname:
     :param key:
     :param pip:
@@ -143,16 +143,16 @@ def setup_clients_and_ntp(num_attackers, dns_host, region, vpc_id, subnet_id, sg
                  cwd=cwd)
     apply_p = check_output(['terraform', 'apply', '-input=false', 'tfplan'], cwd=cwd)
     stdout = apply_p.decode('ascii')
-    bad_ips, chronos_host, naive_host, ntp_attacker_host = _parse_tf_output_ntp_clients(stdout)
-    install_python36_centos(chronos_host, key)
-    return [bad_ips, chronos_host, naive_host, ntp_attacker_host]
+    bad_ips, khronos_host, naive_host, ntp_attacker_host = _parse_tf_output_ntp_clients(stdout)
+    install_python36_centos(khronos_host, key)
+    return [bad_ips, khronos_host, naive_host, ntp_attacker_host]
 
 
 def setup_all_vms(key, region, clients_vpc_id, dns_subnet_id, clients_subnet_id, sg_id, num_attackers):
     # set up dns and get hostname (build, install python+dnslib)
     dns_host = setup_dns_server(region, dns_subnet_id, key)
 
-    # set up clients (build all, install python3 on chronos and on ntp)
+    # set up clients (build all, install python3 on khronos and on ntp)
     ips = setup_clients_and_ntp(num_attackers, dns_host, region, clients_vpc_id, clients_subnet_id, sg_id, key)
 
     return ips.extend(dns_host)
@@ -177,19 +177,19 @@ def teardown_tf(num_attackers):
 def _parse_tf_output_ntp_clients(stdout):
     rows = stdout.split('\n')
     bad_ips = []
-    _chronos_host = ''
+    _khronos_host = ''
     _naive_host = ''
     _ntp_attacker_host = ''
     for row in rows:
         if re.compile("^ *\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3},*$").match(row):
             bad_ips.append(row.replace(" ", "").replace(",", ""))
-        if 'chronos_client =' in row:
-            _chronos_host = row.split(' ')[2]
+        if 'khronos_client =' in row:
+            _khronos_host = row.split(' ')[2]
         if 'naive_client =' in row:
             _naive_host = row.split(' ')[2]
         if 'ntp_attacker_eip =' in row:
             _ntp_attacker_host = row.split(' ')[2][:len(row.split(' ')[2])-4]
-    return bad_ips, _chronos_host, _naive_host, _ntp_attacker_host
+    return bad_ips, _khronos_host, _naive_host, _ntp_attacker_host
 
 
 def _parse_tf_output_dns(stdout):
@@ -198,9 +198,9 @@ def _parse_tf_output_dns(stdout):
     return dns_host
 
 
-def load_vm_data(dns_server_host, chronos_host, ntp_attacker_host, key):
+def load_vm_data(dns_server_host, khronos_host, ntp_attacker_host, key):
     copy_files_to_vm(dns_server_host, Consts.dns_files, key)
-    copy_files_to_vm(chronos_host, Consts.chronos_files, key)
+    copy_files_to_vm(khronos_host, Consts.khronos_files, key)
     copy_files_to_vm(ntp_attacker_host, Consts.attacker_files, key)
 
 

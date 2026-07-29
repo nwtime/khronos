@@ -1,5 +1,5 @@
-# Chronos Experiment Project
-This projects provides an end-to-end experiment environment for the Chronos project.
+# Khronos Experiment Project
+This projects provides an end-to-end experiment environment for the Khronos project.
 
 ## Usage
 Given a virtual env with the required packages installed (see requirements.txt) and Python 3, run:
@@ -31,7 +31,7 @@ the terraform files (build dns_server and clients_and_attacker, stop and install
     - Multiple network interfaces with multiple IPs
     - All traffic open on 0.0.0.0/0
     - Python 3 installed.
-- **Chronos Client** (centos or anything else)
+- **Khronos Client** (centos or anything else)
     - Python 3 installed.
 - **Naive Client** (ubuntu)
     - NTP config file changed in the following manners - 
