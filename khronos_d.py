@@ -111,7 +111,7 @@ def get_offset_list_from_pool(d, w, err=0):
     return offset_list, trimmed_servers
 
 def panic_threshhold_reached(k, len_list, len_servers):
-    logger.warning(f"Panic threshhold of {k} reached for {len_list} offsets from {len_servers} in servers pool")
+    logger.error(f"Panic threshhold of {k} reached for {len_list} offsets from {len_servers} in servers pool")
 
 def get_offset(m, d, k, w, err=0.0):
     if len(QUERY_SERVERS) != m:

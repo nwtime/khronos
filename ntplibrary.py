@@ -54,7 +54,7 @@
 ###############################################################################
 """Python NTP library.
 
-Implementation of client-side NTP (RFC-05), and useful NTP-related
+Implementation of client-side NTP (RFC-5905), and useful NTP-related
 functions.
 """
 

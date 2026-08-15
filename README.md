@@ -1,5 +1,5 @@
 # Khronos NTP Client Project
-This projects provides a khronos_d, a Khronos client which is used as a watchdog for improving NTPv4 client security against powerful attackers
+This project provides a khronos_d, a Khronos client which is used as a watchdog for improving NTPv4 client security against powerful attackers
 who are in direct control of a large number of NTP servers (see details in [Khronos paper](https://www.ndss-symposium.org/wp-content/uploads/2018/02/ndss2018_02A-2_Deutsch_paper.pdf) and in [Khronos IETF RFC](https://datatracker.ietf.org/doc/rfc9523/)).
 
 Moreover, an end-to-end experiment environment is provided.
