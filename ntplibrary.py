@@ -186,7 +186,7 @@ class NTPPacket(object):
         self.recv_timestamp = 0
         """receive timestamp"""
         self.tx_timestamp = tx_timestamp
-        """tansmit timestamp"""
+        """transmit timestamp"""
 
     def to_data(self):
         """Convert this NTPPacket to a buffer that can be sent over a socket.
@@ -360,7 +360,7 @@ class NTPClient(object):
             # build the destination timestamp
             dest_timestamp = system_to_ntp_time(time.time())
         except socket.timeout:
-            raise NTPException("No response received from %s." % host)
+            raise NTPException("No response received")
         finally:
             s.close()
 
