@@ -34,23 +34,51 @@ import json
 import math
 import logging
 
-from ntplibrary import NTPClient
+import colorlog
+import socket
+
+from ntplibrary import NTPClient, NTPException
 
 BASE_NTP_PACKET_SIZE = 48
+no_response_count = {}
+LEAP_NOTINSYNC = 3
 
 def init_logging(log_name, log_file = 'khronos.log'):
     global logger
-    logger = logging.getLogger(log_name)
+    logger = colorlog.getLogger(log_name)
     logger.setLevel(logging.DEBUG)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(formatter)
-    logger.addHandler(stream_handler)
+    handler = colorlog.StreamHandler()
+    coloredFormatter = colorlog.ColoredFormatter(
+        # Format string using the special %(log_color)s variable
+        fmt="%(log_color)s%(asctime)s - %(name)s - %(levelname)-8s - %(message)s",
+        log_colors={
+            'DEBUG': 'cyan',
+            'INFO': 'green',
+            'WARNING': 'yellow',
+            'ERROR': 'red',
+            'CRITICAL': 'bold_red',
+        }
+    )
+    handler.setFormatter(coloredFormatter)
+    logger = colorlog.getLogger(log_name)
+    logger.addHandler(handler)
     file_handler = logging.FileHandler(filename=log_file, mode='a')  # define where the log will be written.  mode parameter will determine whether to append to log if it exists ('a') or write over file ('w').
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
     return logger
 
+def add_to_no_response_count(ip):
+    if not ip in no_response_count:
+        no_response_count[ip] = 0
+    no_response_count[ip] += 1
+
+def remove_from_no_response_count(ip):
+    logger.info(f"Retry succeeded: {ip} server responded, count: {no_response_count[ip]}")
+    no_response_count.pop(ip, 0)
+
+def get_no_response_counts(ip):
+    return no_response_count[ip]
 
 def read_server_list(file_to_load):
     try:
@@ -59,10 +87,23 @@ def read_server_list(file_to_load):
             with open(file_to_load, 'rb') as file:
                 return json.load(file)
     except FileNotFoundError:
-        print(f"The file {file_to_load} was not found.")
+        logger.error(f"The file {file_to_load} was not found.")
     except json.JSONDecodeError:
-        print(f"The file {file_to_load} contains invalid JSON.")
+        logger.error(f"The file {file_to_load} contains invalid JSON.")
         return None
+
+def lookup_dns_addresses(dns_names):
+    addresses = set()
+    for dns_name in dns_names:
+        logger.debug(f"Lookup for {dns_name}")
+        try:
+            addr_info = socket.getaddrinfo(dns_name, None)
+            ips = set(info[4][0] for info in addr_info)
+            addresses |= ips
+        except socket.gaierror:
+            logger.error(f"Failed to resolve {dns_name}")
+            continue
+    return addresses
 
 def open_write_file(file_to_save, file_permissions):
     try:
@@ -76,29 +117,34 @@ def open_write_file(file_to_save, file_permissions):
         print(f"An unexpected error occurred: {e}")
     return None
 
-def validate_response_size(response, ip):
-    if response.packet_size >= BASE_NTP_PACKET_SIZE and response.packet_size % 4 == 0:
+def validate_failure_checks(ip, value, condition, check_type):
+    if condition:
         return True
     else:
-        logger.warning(f"Invalid packet size {response.packet_size} from {ip}")
+        logger.warning(f"Invalid {check_type}: {value} from {ip}")
         return False
+def validate_response_size(response, ip):
+    return validate_failure_checks(ip, response.packet_size, response.packet_size >= BASE_NTP_PACKET_SIZE and response.packet_size % 4 == 0, "packet size")
 
-def validate_response_mode(response):
+def validate_response_mode(response, ip):
     match response.input_mode:
         case 3:
-            return response.mode == 4
+            return validate_failure_checks(ip, response.mode, response.mode == 4, "response mode")
         case _:
-            return True
+            return False
 
 def validate_origin_timestamp(response, ip):
     match response.input_mode:
         case 3| 1| 2:
-            return response.orig_timestamp == response.sent_timestamp
+            return validate_failure_checks(ip, response.orig_timestamp, response.orig_timestamp == response.sent_timestamp, "origin timestamp")
         case _:
             return True
 
-def valid_stratum(response):
-    return response.stratum > 0 and response.stratum < 16
+def valid_stratum(response, ip):
+    return validate_failure_checks(ip, response.stratum, 0 < response.stratum < 16, "stratum")
+
+def validate_synchonized(response, ip):
+    return validate_failure_checks(ip, response.leap, response.leap != LEAP_NOTINSYNC, "synchonized")
 
 def validate_responses(results):
 
@@ -109,13 +155,42 @@ def validate_responses(results):
             logger.error(f"Kiss code {result.kiss_name} received from {ip}")
         if (validate_response_size(result, ip)
                 and not result.has_kiss_code
-                and valid_stratum(result)
-                and validate_response_mode(result)
+                and valid_stratum(result, ip)
+                and validate_synchonized(result, ip)
+                and validate_response_mode(result, ip)
                 and validate_origin_timestamp(result, ip)):
             responses[ip] = result
         else:
             logger.warning(f"Invalid response from {ip}")
     return responses
+
+def request_packet(ip, retry):
+
+    if retry:
+        retried = "Retried: "
+    else:
+        retried = ""
+    ntp_client = NTPClient()
+
+    try:
+        return ntp_client.request(ip, version=4, mode=3, timeout=7)
+
+    except NTPException as err:
+        add_to_no_response_count(ip)
+        logger.warning(f"{retried}{ip}: {err}")
+    except socket.timeout as err:
+        add_to_no_response_count(ip)
+        logger.warning(f"{retried}Socket timeout for {ip}: {str(err)}")
+    except ConnectionError as err:
+        add_to_no_response_count(ip)
+        logger.warning(f"{retried}Connection error for {ip}: {str(err)}")
+    except OSError as err:
+        logger.error(f"{retried}OS error for {ip}: {str(err)}")
+    except Exception as err:
+        logger.exception(f"{retried}Unexpected error from {ip}: {str(err)}")
+
+    return None # Failed to get packet
+
 
 def req_multiple_server_results(servers):
     """
@@ -123,20 +198,24 @@ def req_multiple_server_results(servers):
     :param server_indices:
     :return:
     """
-    ntp_client = NTPClient()
     responses = {}
     ips_failed = []
     for ip in servers:
-        try:
-            responses[ip] = ntp_client.request(ip, version=4, mode=3)
-        except Exception as err:
+        response = request_packet(ip, False)
+        if response is not None:
+            responses[ip] = response
+        else:
             ips_failed.append(ip)
-            print(ip, err)
+
+    """
+    Retry the failed requests
+    """
     for ip in ips_failed:
-        try:
-            responses[ip] = ntp_client.request(ip)
-        except Exception as err:
-            print(ip, err)
+        response = request_packet(ip, True)
+        if response is not None:
+            responses[ip] = response
+            remove_from_no_response_count(ip)
+
     return {ip: responses[ip] for ip in servers if ip in responses}
 
 
