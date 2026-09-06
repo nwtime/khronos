@@ -73,6 +73,8 @@ class NTPException(Exception):
 class NTP:
     """Helper class defining constants."""
 
+    _BASE_NTP_PACKET_SIZE = 48
+
     _SYSTEM_EPOCH = datetime.date(*time.gmtime(0)[0:3])
     """system epoch"""
     _NTP_EPOCH = datetime.date(1900, 1, 1)
@@ -143,15 +145,22 @@ class NTP:
     }
     """leap indicator table"""
 
+    @property
+    def BASE_NTP_PACKET_SIZE(self):
+        return self._BASE_NTP_PACKET_SIZE
 
-class NTPPacket(object):
-    """NTP packet class.
 
+"""
+    NTP packet class.
     This represents an NTP packet.
-    """
+"""
+class NTPPacket(object):
 
+    """
+    packet format to pack/unpack the base of the NTP packet.
+    This ignores any MAC and extension fields
+    """
     _PACKET_FORMAT = "!B B B b 11I"
-    """packet format to pack/unpack"""
 
     def __init__(self, version=2, mode=3, tx_timestamp=0):
         """Constructor.
@@ -367,6 +376,10 @@ class NTPClient(object):
         # construct corresponding statistics
         stats = NTPStats()
         stats.from_data(response_packet)
+
+        '''
+        Additional information to pass back:
+        '''
         stats.packet_size = len(response_packet)
         stats.dest_timestamp = dest_timestamp
         stats.sent_timestamp = query_packet.tx_timestamp
