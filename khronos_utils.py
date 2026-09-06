@@ -33,6 +33,7 @@ import os
 import json
 import math
 import logging
+import time
 
 import colorlog
 import socket
@@ -42,12 +43,13 @@ from ntplibrary import NTPClient, NTPException
 BASE_NTP_PACKET_SIZE = 48
 no_response_count = {}
 LEAP_NOTINSYNC = 3
+MAX_SERVER_FAILURES = 10
 
 def init_logging(log_name, log_file = 'khronos.log'):
     global logger
     logger = colorlog.getLogger(log_name)
     logger.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)-8s - %(message)s')
     handler = colorlog.StreamHandler()
     coloredFormatter = colorlog.ColoredFormatter(
         # Format string using the special %(log_color)s variable
@@ -72,10 +74,12 @@ def add_to_no_response_count(ip):
     if not ip in no_response_count:
         no_response_count[ip] = 0
     no_response_count[ip] += 1
+    if no_response_count[ip] >= MAX_SERVER_FAILURES:
+        logger.error(f"Server {ip} exceeded the maximum number of failures allowed ({MAX_SERVER_FAILURES}).")
 
 def remove_from_no_response_count(ip):
-    logger.info(f"Retry succeeded: {ip} server responded, count: {no_response_count[ip]}")
-    no_response_count.pop(ip, 0)
+    logger.info(f"Retry succeeded: {ip} server responded, failed count: {no_response_count[ip]}")
+    no_response_count[ip] = 0
 
 def get_no_response_counts(ip):
     return no_response_count[ip]
@@ -95,7 +99,6 @@ def read_server_list(file_to_load):
 def lookup_dns_addresses(dns_names):
     addresses = set()
     for dns_name in dns_names:
-        logger.debug(f"Lookup for {dns_name}")
         try:
             addr_info = socket.getaddrinfo(dns_name, None)
             ips = set(info[4][0] for info in addr_info)
@@ -104,6 +107,26 @@ def lookup_dns_addresses(dns_names):
             logger.error(f"Failed to resolve {dns_name}")
             continue
     return addresses
+
+def retrieve_server_addresses(zone_dns_names, pool_size, max_time_secs):
+
+    # DNS names to retrieve ip addresses
+    for dns_name in zone_dns_names:
+        logger.debug(f"Lookup for {dns_name}")
+
+    final_server_list = set()
+    iterations = 1
+    start = time.time()
+    current_time = start
+    while len(final_server_list) < pool_size and current_time - start < max_time_secs:
+        final_server_list |= lookup_dns_addresses(zone_dns_names)
+        logger.debug(f"iteration {iterations}, so far collected {len(final_server_list)} servers.")
+        iterations += 1
+        if len(final_server_list) < pool_size:
+            time.sleep(60)
+        current_time = time.time()
+
+    return final_server_list
 
 def open_write_file(file_to_save, file_permissions):
     try:
@@ -150,7 +173,6 @@ def validate_responses(results):
 
     responses = dict()
     for ip, result in results.items():
-        # logger.debug(f"Validating response from {ip}")
         if result.has_kiss_code:
             logger.error(f"Kiss code {result.kiss_name} received from {ip}")
         if (validate_response_size(result, ip)
@@ -164,44 +186,42 @@ def validate_responses(results):
             logger.warning(f"Invalid response from {ip}")
     return responses
 
-def request_packet(ip, retry):
+def add_failure(ip, err, err_msg):
+    add_to_no_response_count(ip)
+    logger.warning(f"{err_msg}{ip}: {str(err)}")
 
-    if retry:
-        retried = "Retried: "
-    else:
-        retried = ""
+def request_packet(ip, retried):
+
     ntp_client = NTPClient()
 
     try:
-        return ntp_client.request(ip, version=4, mode=3, timeout=7)
+        return ntp_client.request(ip, version=4, mode=3, timeout=20)
 
     except NTPException as err:
-        add_to_no_response_count(ip)
-        logger.warning(f"{retried}{ip}: {err}")
+        add_failure(ip, err, retried)
     except socket.timeout as err:
-        add_to_no_response_count(ip)
-        logger.warning(f"{retried}Socket timeout for {ip}: {str(err)}")
+        add_failure(ip, err, retried + "Socket timeout for ")
     except ConnectionError as err:
-        add_to_no_response_count(ip)
-        logger.warning(f"{retried}Connection error for {ip}: {str(err)}")
+        add_failure(ip, err, retried + "Connection error for ")
     except OSError as err:
-        logger.error(f"{retried}OS error for {ip}: {str(err)}")
+        add_failure(ip, err, retried + "OS error for ")
     except Exception as err:
+        add_to_no_response_count(ip)
         logger.exception(f"{retried}Unexpected error from {ip}: {str(err)}")
 
     return None # Failed to get packet
 
-
+"""
+send requests to a chosen list of ips, return the offsets they return
+:param servers: list of ip addresses
+:return:
+"""
 def req_multiple_server_results(servers):
-    """
-    send requests to a chosen list of ips, return the offsets they return
-    :param server_indices:
-    :return:
-    """
+
     responses = {}
     ips_failed = []
     for ip in servers:
-        response = request_packet(ip, False)
+        response = request_packet(ip, "")
         if response is not None:
             responses[ip] = response
         else:
@@ -211,7 +231,7 @@ def req_multiple_server_results(servers):
     Retry the failed requests
     """
     for ip in ips_failed:
-        response = request_packet(ip, True)
+        response = request_packet(ip, "Retried: ")
         if response is not None:
             responses[ip] = response
             remove_from_no_response_count(ip)
