@@ -26,16 +26,16 @@ class Consts:
 
     # File paths
     ntp_adversary_script_path = str(Path('resources', 'ntp_adversary.py').resolve())
-    chronos_client_script_path = str(Path('resources', 'chronos_client.py').resolve())
+    khronos_client_script_path = str(Path('resources', 'khronos_client.py').resolve())
     my_ntplib_script_path = str(Path('resources', 'my_ntplib.py').resolve())
     bad_servers_path = str(Path('resources', 'bad_servers.json').resolve())
     zones_path = str(Path('resources', 'zones.txt').resolve())
     dns_server_script_path = str(Path('resources', 'dnserver.py').resolve())
-    chronos_pool_path = str(Path('resources', 'chronos_servers_pool.json').resolve())
+    khronos_pool_path = str(Path('resources', 'khronos_servers_pool.json').resolve())
     current_s_path = str(Path('resources', 'current_s.json').resolve())
     aws_info_path = str(Path('aws_info.json'))
 
     dns_files = [zones_path, dns_server_script_path]
-    chronos_files = [chronos_client_script_path, my_ntplib_script_path, chronos_pool_path, current_s_path,
+    khronos_files = [khronos_client_script_path, my_ntplib_script_path, khronos_pool_path, current_s_path,
                      bad_servers_path]
     attacker_files = [ntp_adversary_script_path]

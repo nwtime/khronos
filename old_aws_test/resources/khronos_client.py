@@ -37,7 +37,7 @@ def req_multiple_servers(server_indices, servers_pool):
 
 def time_update(S):
     """
-    Chronos Time Update Algorithm
+    Khronos Time Update Algorithm
     :param S: a list of indexes of the servers pool to query
     :type S: List[int]
     :return: the chosen offset
@@ -53,7 +53,7 @@ def time_update(S):
         t = int(d * m)
         T = offsets[t:m - t]
 
-        # check wether all surviving samples are "close"
+        # check whether all surviving samples are "close"
         avg_offset = sum(T) / float(len(T))*2 if smooth else sum(T) / float(len(T))
         if (math.fabs(max(T) - min(T)) <= 2 * w) and (math.fabs(avg_offset - truth) <= w * 2 + err):
                 return avg_offset
@@ -70,8 +70,8 @@ def time_update(S):
 
 
 if __name__ == "__main__":
-    # USAGE chronos_client.py [m] [d] [k] [w] [err] [attack_prob] [truth] [optional: update] [optional: smooth]
-    # Files needed to be on machine: 'chronos_servers_pool.json' 'current_s.json'
+    # USAGE khronos_client.py [m] [d] [k] [w] [err] [attack_prob] [truth] [optional: update] [optional: smooth]
+    # Files needed to be on machine: 'khronos_servers_pool.json' 'current_s.json'
     m = int(sys.argv[1])
     d = float(sys.argv[2])
     k = int(sys.argv[3])
@@ -82,7 +82,7 @@ if __name__ == "__main__":
 
     truth = float(sys.argv[7])
 
-    servers_pool = json.load(open('chronos_servers_pool.json'))   # [ip1, ip2..]
+    servers_pool = json.load(open('khronos_servers_pool.json'))   # [ip1, ip2..]
     current_S = json.load(open('../../current_s.json'))  # [idx1, idx2..]
     # if update, S is drawn again from the pool and saved for next rounds, else it's the previously chosen S
     if update:

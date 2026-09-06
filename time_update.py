@@ -89,11 +89,11 @@ def _linux_set_time_sec(sec):
 
 def _linux_adjtime(sec):
     tv = timeval()
-    tv.tv_sec = long(sec)
+    tv.tv_sec = int(sec)
     if sec > 0:
-        tv.tv_usec = long((sec%1) * 1000000)
+        tv.tv_usec = int((sec%1) * 1000000)
     else:
-        tv.tv_usec = -long((-sec % 1) * 1000000)
+        tv.tv_usec = -int((-sec % 1) * 1000000)
     tv2 = timeval()
     # http://linux.die.net/man/3/adjtime
     res = librt.adjtime(ctypes.byref(tv), ctypes.byref(tv2))
@@ -134,4 +134,4 @@ def set_time_sec(sec):
 if __name__ == "__main__":
     import os
     dif = int(os.sys.argv[1])
-    print _linux_adjtime(dif/1000.0)
+    print (_linux_adjtime(dif/1000.0))

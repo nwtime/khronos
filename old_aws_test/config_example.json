@@ -1,5 +1,5 @@
 {
-    "chronos_params": {
+    "khronos_params": {
         "n": "num of servers in a pool {50,500}",
         "m": "num of sampled servers {8,10,12,14,16,18}",
         "d": "num of samples to drop from each side [float < 1]",
@@ -21,7 +21,7 @@
     },
     "vm_params": {
         "dns_host": "",
-        "chronos_host": "",
+        "khronos_host": "",
         "naive_host": "",
         "ntp_attacker_host": "",
         "ntp_private_ips": []
