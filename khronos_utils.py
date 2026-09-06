@@ -38,9 +38,10 @@ import time
 import colorlog
 import socket
 
-from ntplibrary import NTPClient, NTPException
+from ntplibrary import NTPClient, NTPException, NTP
 
-BASE_NTP_PACKET_SIZE = 48
+_NTP_EXPECTED_VERSION = 4
+
 no_response_count = {}
 LEAP_NOTINSYNC = 3
 MAX_SERVER_FAILURES = 10
@@ -146,8 +147,9 @@ def validate_failure_checks(ip, value, condition, check_type):
     else:
         logger.warning(f"Invalid {check_type}: {value} from {ip}")
         return False
+
 def validate_response_size(response, ip):
-    return validate_failure_checks(ip, response.packet_size, response.packet_size >= BASE_NTP_PACKET_SIZE and response.packet_size % 4 == 0, "packet size")
+    return validate_failure_checks(ip, response.packet_size, response.packet_size >= NTP._BASE_NTP_PACKET_SIZE and response.packet_size % 4 == 0, "packet size")
 
 def validate_response_mode(response, ip):
     match response.input_mode:
@@ -169,6 +171,9 @@ def valid_stratum(response, ip):
 def validate_synchonized(response, ip):
     return validate_failure_checks(ip, response.leap, response.leap != LEAP_NOTINSYNC, "synchonized")
 
+def server_version_check(response, ip):
+    return validate_failure_checks(ip, response.version, response.version == _NTP_EXPECTED_VERSION, "version")
+
 def validate_responses(results):
 
     responses = dict()
@@ -178,6 +183,7 @@ def validate_responses(results):
         if (validate_response_size(result, ip)
                 and not result.has_kiss_code
                 and valid_stratum(result, ip)
+                and server_version_check(result, ip)
                 and validate_synchonized(result, ip)
                 and validate_response_mode(result, ip)
                 and validate_origin_timestamp(result, ip)):

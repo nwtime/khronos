@@ -53,7 +53,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.'''
 
 import os
-import socket
 import random
 import math
 import json
@@ -85,7 +84,7 @@ def get_random_server_list_from_pool(total_servers_needed):
     QUERY_SERVERS = [SERVERS_POOL[idx] for idx in server_indices]
     json.dump(QUERY_SERVERS, open(STATE_PATH, 'w'), indent=4, separators=(',', ': '))
 
-def get_offset_list_from_pool(server_list, fraction_to_use, err=0):
+def get_offset_list_from_pool(server_list, fraction_to_use, err=0.0):
     # query chosen servers
     offsets_dict = khronos_utils.req_multiple_server_offsets(server_list)
     if len(offsets_dict) == 0:
