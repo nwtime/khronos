@@ -64,6 +64,7 @@ import time
 QUERY_SERVERS = []
 SERVERS_POOL = []
 STATE_PATH = 'current_s.json'
+servers_available = True
 
 
 def calibration(pool_size, server_pool_path, zone_pools_path, zone, max_time_secs=2 * 60 * 60):
@@ -85,12 +86,15 @@ def get_random_server_list_from_pool(total_servers_needed):
     json.dump(QUERY_SERVERS, open(STATE_PATH, 'w'), indent=4, separators=(',', ': '))
 
 def get_offset_list_from_pool(server_list, fraction_to_use, err=0.0):
+    global servers_available
     # query chosen servers
     offsets_dict = khronos_utils.req_multiple_server_offsets(server_list)
     if len(offsets_dict) == 0:
         logger.error("No servers available")
+        servers_available = False
         return None, None
 
+    servers_available = True
     sorted_servers = sorted(offsets_dict.keys(), key=offsets_dict.get)
     offset_list_size = len(offsets_dict)
 
@@ -112,7 +116,7 @@ def get_offset(total_servers_needed, fraction_to_use, max_retries, spread_limit,
     while retries < max_retries:
         offset_list, trimmed_servers = get_offset_list_from_pool(QUERY_SERVERS, fraction_to_use, err)
         #Make sure we have offsets to work with
-        if offset_list == None or len(offset_list) == 0:
+        if offset_list is None or len(offset_list) == 0:
             return None, None, None
 
         min_offset = min(offset_list, key=math.fabs)
@@ -221,6 +225,9 @@ def update_loop(update_query_interval, query_interval, server_pool_path, state_p
                 print(f"count = {loop_count}, ind = {i}, last offset = {last_offset}, offset = {offset}, changed = {change} delta = {delta}, min_offset = {min_offset}")
                 out.write("%f,%f\n" % (time.time(), offset))
                 last_offset = offset
+
+            if loop_count % 10 == 0:
+                khronos_utils.report_statistics()
 
             time.sleep(query_interval)
 

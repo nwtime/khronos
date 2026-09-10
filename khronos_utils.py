@@ -28,12 +28,13 @@
 * DAMAGE.                                                             *
 ***********************************************************************
 '''
-
+# import ipaddress
 import os
 import json
 import math
 import logging
 import time
+from collections import defaultdict
 
 import colorlog
 import socket
@@ -43,6 +44,9 @@ from ntplibrary import NTPClient, NTPException, NTP
 _NTP_EXPECTED_VERSION = 4
 
 no_response_count = {}
+tracker = defaultdict(lambda: {"no_response_count": 0, "fail_count": 0, "request_count": 0})
+error_types = defaultdict(lambda: defaultdict(int))
+last_offset = {}
 LEAP_NOTINSYNC = 3
 MAX_SERVER_FAILURES = 10
 
@@ -75,15 +79,30 @@ def add_to_no_response_count(ip):
     if not ip in no_response_count:
         no_response_count[ip] = 0
     no_response_count[ip] += 1
-    if no_response_count[ip] >= MAX_SERVER_FAILURES:
-        logger.error(f"Server {ip} exceeded the maximum number of failures allowed ({MAX_SERVER_FAILURES}).")
+    tracker[ip]["no_response_count"] += 1
+    tracker[ip]["fail_count"] += 1
+    if tracker[ip]["no_response_count"] >= MAX_SERVER_FAILURES:
+        logger.error(f"Server {ip} exceeded the maximum number of failures allowed ({tracker[ip]["no_response_count"]} >= {MAX_SERVER_FAILURES}).")
 
 def remove_from_no_response_count(ip):
-    logger.info(f"Retry succeeded: {ip} server responded, failed count: {no_response_count[ip]}")
+    logger.info(f"Retry succeeded: {ip} server responded, failed count: {tracker[ip]["no_response_count"]}")
     no_response_count[ip] = 0
+    tracker[ip]["no_response_count"] = 0
 
-def get_no_response_counts(ip):
-    return no_response_count[ip]
+def add_request_count(ip):
+        tracker[ip]["request_count"] += 1
+
+def report_statistics():
+    logger.info(f"Statistics:")
+    for ip, value in tracker.items():
+        logger.info(f"{ip}: {value}")
+
+    '''Report errors'''
+    logger.info(f"Errors Reported:")
+    for err, value in error_types.items():
+        logger.info(f"\t{err}")
+        for ip, count in value.items():
+            logger.info(f"\t\tIP: {ip} count: {count}")
 
 def read_server_list(file_to_load):
     try:
@@ -178,22 +197,36 @@ def validate_responses(results):
 
     responses = dict()
     for ip, result in results.items():
+        add_request_count(ip)
+        server_version_check(result, ip)
         if result.has_kiss_code:
             logger.error(f"Kiss code {result.kiss_name} received from {ip}")
         if (validate_response_size(result, ip)
                 and not result.has_kiss_code
                 and valid_stratum(result, ip)
-                and server_version_check(result, ip)
                 and validate_synchonized(result, ip)
                 and validate_response_mode(result, ip)
                 and validate_origin_timestamp(result, ip)):
             responses[ip] = result
+            check_offset(result, ip)
+
+
         else:
             logger.warning(f"Invalid response from {ip}")
     return responses
 
+def check_offset(response, ip):
+    this_offset = response.offset
+    if not ip in last_offset:
+        last_offset[ip] = this_offset
+    else:
+        change = this_offset - last_offset[ip]
+        last_offset[ip] = this_offset
+        # print(f"{ip} offset changed by {change}")
+
 def add_failure(ip, err, err_msg):
     add_to_no_response_count(ip)
+    error_types[str(err)][ip] += 1
     logger.warning(f"{err_msg}{ip}: {str(err)}")
 
 def request_packet(ip, retried):
@@ -201,7 +234,7 @@ def request_packet(ip, retried):
     ntp_client = NTPClient()
 
     try:
-        return ntp_client.request(ip, version=4, mode=3, timeout=20)
+        return ntp_client.request(ip, version=4, mode=3, timeout=5)
 
     except NTPException as err:
         add_failure(ip, err, retried)
@@ -252,9 +285,11 @@ def req_multiple_server_offsets(servers):
     responses = validate_responses(results)
     return {ip: responses[ip].offset for ip in servers if ip in responses}
 
-def get_offset_simple(m, d, k, w, err, servers):
+def get_offset_simple(w, err, servers):
     # query chosen servers
     offset_list = req_multiple_server_offsets(servers).values()
+    if offset_list is None or len(offset_list) == 0:
+        return None
     # check whether all surviving samples are "close"
     avg_offset = sum(offset_list) / len(offset_list)
     if (
