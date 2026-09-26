@@ -1,4 +1,4 @@
-'''********************************************************************
+"""********************************************************************
 *                                                                     *
 * Copyright (c) Network Time Foundation 2026                          *
 *                                                                     *
@@ -27,7 +27,7 @@
 * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH    *
 * DAMAGE.                                                             *
 ***********************************************************************
-'''
+"""
 ###############################################################################
 # The MIT License (MIT)
 #
@@ -178,7 +178,7 @@ class NTPPacket(object):
         """mode"""
         self.stratum = 0
         """stratum"""
-        self.poll = 0
+        self.poll = 6
         """poll interval"""
         self.precision = 0
         """precision"""
@@ -196,6 +196,21 @@ class NTPPacket(object):
         """receive timestamp"""
         self.tx_timestamp = tx_timestamp
         """transmit timestamp"""
+
+        self.has_kiss_code = False
+        """has KISS code"""
+        self.kiss_name = ""
+        """KISS name"""
+        self.packet_size = 0
+        """packet size"""
+        self.sent_timestamp = 0
+        """sent timestamp"""
+        self.input_packet_size = 0
+        """input packet size"""
+        self.input_mode = 0
+        """input mode"""
+        self.Rtt = 0
+        """Round trip time"""
 
     def to_data(self):
         """Convert this NTPPacket to a buffer that can be sent over a socket.
@@ -255,7 +270,7 @@ class NTPPacket(object):
         self.precision = unpacked[3]
         self.root_delay = float(unpacked[4])/2**16
         self.root_dispersion = float(unpacked[5])/2**16
-        self.ref_id = unpacked[6]
+        self.ref_id = ref_id_to_name(unpacked[6], self.stratum)
         self.ref_timestamp = _to_time(unpacked[7], unpacked[8])
         self.orig_timestamp = _to_time(unpacked[9], unpacked[10])
         self.recv_timestamp = _to_time(unpacked[11], unpacked[12])
@@ -385,6 +400,7 @@ class NTPClient(object):
         stats.sent_timestamp = query_packet.tx_timestamp
         stats.input_mode = mode
         stats.input_packet_size = len(send_packet)
+        stats.Rtt = dest_timestamp - query_packet.tx_timestamp
 
         return stats
 
@@ -539,13 +555,37 @@ def ref_id_to_text(ref_id, stratum=2):
     fields = get_ref_id_fields(ref_id)
 
     # return the result as a string or dot-formatted IP address
-    if 0 <= stratum <= 1:
+    if stratum == 1:
         text = "%c%c%c%c" % fields
         if text in NTP.REF_ID_TABLE:
             return NTP.REF_ID_TABLE[text]
         else:
             return "Unidentified reference source '%s'" % text
-    elif 2 <= stratum < 255:
+    elif 2 <= stratum < 16:
+        return "%d.%d.%d.%d" % fields
+    else:
+        raise NTPException("Invalid stratum.")
+
+def ref_id_to_name(ref_id, stratum=2):
+    """Convert a reference clock identifier to text according to its stratum.
+
+    Parameters:
+    ref_id  -- reference clock identifier
+    stratum -- NTP stratum
+
+    Returns:
+    corresponding message
+
+    Raises:
+    NTPException -- in case of invalid stratum
+    """
+    fields = get_ref_id_fields(ref_id)
+
+    # return the result as a string or dot-formatted IP address
+    if stratum == 1:
+        return "%c%c%c%c" % fields
+
+    elif 2 <= stratum < 16:
         return "%d.%d.%d.%d" % fields
     else:
         raise NTPException("Invalid stratum.")

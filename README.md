@@ -9,7 +9,7 @@ Next, the python implementation is presented.
 
 # Usage
 
-See [COMMAND_LINE_ARGUMENTS.md](COMMAND_LINE_ARGUMENTS.md) for the complete
+See [[Command_Line_Arguments.md](Command_Line_Arguments.md)] for the complete
 current argument reference, defaults, and configuration-file behavior.
 
 Given a virtual env with the required packages installed (matplotlib, fabric), run:

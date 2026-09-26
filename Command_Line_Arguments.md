@@ -82,3 +82,18 @@ Load an existing configuration file:
 ```bash
 python khronos_d.py --conf_path config.json
 ```
+
+## Additional Examples
+```
+python khronos_d.py -m 5 -d 0.2 -p khronos_servers_pool.json -S current_s.json
+python khronos_d.py -m 5 -d 0.2 -p khronos_servers_pool.json -S current_s.json -w 0.025 -e 0.05 -o 
+python khronos_d.py -m 5 -d 0.2 -p khronos_servers_pool_0.json -S current_s_0.json -w 0.025 -e 0.05 -o  -n 200 -M 300 -C -Z zone_pools.json
+python khronos_d.py -m 12 -d 0.34  -w 0.025 -e 0.05 -n 500 -M 36000 -C -z usa -p khronos_servers_pool_oragon.json
+python khronos_d.py -m 12 -d 0.34 -n 500 -M 36000 -C -z uk -p khronos_servers_pool_oragon.json -u 3600 -q 60
+python khronos_d.py -m 12 -d 0.34 -z usa -p khronos_servers_pool_oragon.json -u 3600 -q 60
+python khronos_d.py -m 12 -d 0.34 -n 500 -M 36000 -C -z germany -p khronos_servers_pool_frankfurt.json -u 3600 -q 60
+python khronos_d.py -m 12 -d 0.34 -n 500 -M 36000 -C -z usa -p khronos_servers_pool_virginia.json -u 3600 -q 60
+python khronos_d.py -m 12 -d 0.34 -n 500 -M 36000 -C -z uk -p khronos_servers_pool_london.json -u 3600 -q 60
+
+
+```
