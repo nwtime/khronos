@@ -1,4 +1,4 @@
-'''********************************************************************
+"""********************************************************************
 *                                                                     *
 * Copyright (c) Network Time Foundation 2026                          *
 *                                                                     *
@@ -27,10 +27,7 @@
 * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH    *
 * DAMAGE.                                                             *
 ***********************************************************************
-'''
-from pathlib import Path
-
-from sympy.codegen.ast import none
+"""
 
 '''Copyright (c) <2019> <Neta Rozen Schiff>
 
@@ -57,33 +54,59 @@ import random
 import math
 import json
 import argparse
+from pathlib import Path
 
+import khronos_analysis
 import khronos_utils
 import time
 
+DNS_ZONE_NAMES = []
 QUERY_SERVERS = []
 SERVERS_POOL = []
 STATE_PATH = 'current_s.json'
 servers_available = True
 
+def initialize_server_pool(pool_size, server_pool_path, zone_pools_path, zone, max_time_secs=2 * 60 * 60):
+    global SERVERS_POOL
+    global DNS_ZONE_NAMES
 
-def calibration(pool_size, server_pool_path, zone_pools_path, zone, max_time_secs=2 * 60 * 60):
     logger.info(f"Starting to retrieve server pool ip addresses from {zone} zone list")
-    dns_name_list = json.load(open(zone_pools_path, 'r'))
-    zone_dns_names = dns_name_list[zone]
+    DNS_ZONE_NAMES = khronos_utils.get_dns_names_for_zone(zone_pools_path, zone)
 
-    final_server_list = khronos_utils.retrieve_server_addresses(zone_dns_names, pool_size, max_time_secs)
+    ''' Set up the server pool '''
+    SERVERS_POOL = khronos_utils.retrieve_server_addresses(DNS_ZONE_NAMES, pool_size, max_time_secs)
 
-    logger.info(f"Total of {len(final_server_list)} servers collected")
-    json.dump(list(final_server_list), open(server_pool_path, 'w'),
+    json.dump(list(SERVERS_POOL), open(server_pool_path, 'w'),
             indent=4, separators=(',', ': '))
+
+def remove_failed_servers(pool_list, query_list):
+    removals = khronos_analysis.get_removals()
+    for ip in removals:
+        if ip in pool_list:
+            pool_list.remove(ip)
+        if ip  in query_list:
+            query_list.remove(ip)
+        logger.info(f"Removed {ip} from server list")
+        khronos_utils.remove_server(ip)
+    khronos_analysis.delete_removals()
+
 
 def get_random_server_list_from_pool(total_servers_needed):
     global QUERY_SERVERS
     global SERVERS_POOL
+
+    ''' Make sure to remove servers that have proven to be not reliable sources '''
+    remove_failed_servers(SERVERS_POOL, QUERY_SERVERS)
+
+    ''' If we don't have enough ask DNS for more servers '''
+    if total_servers_needed > len(SERVERS_POOL):
+        SERVERS_POOL = khronos_utils.retrieve_server_addresses(DNS_ZONE_NAMES, total_servers_needed)
+
     server_indices = random.sample(range(len(SERVERS_POOL)), total_servers_needed)
-    QUERY_SERVERS = [SERVERS_POOL[idx] for idx in server_indices]
+    server_list = list(SERVERS_POOL)
+    QUERY_SERVERS = [server_list[idx] for idx in server_indices]
     json.dump(QUERY_SERVERS, open(STATE_PATH, 'w'), indent=4, separators=(',', ': '))
+
 
 def get_offset_list_from_pool(server_list, fraction_to_use, err=0.0):
     global servers_available
@@ -102,14 +125,15 @@ def get_offset_list_from_pool(server_list, fraction_to_use, err=0.0):
     needed_size = int(fraction_to_use * offset_list_size)
     trimmed_servers = sorted_servers[needed_size:offset_list_size - needed_size]
 
+    khronos_analysis.analyze_excluded_offsets(offsets_dict, trimmed_servers, needed_size)
     offset_list = [offsets_dict[s] for s in trimmed_servers]
     return offset_list, trimmed_servers
 
-def panic_threshhold_reached(k, len_list, len_servers):
-    logger.error(f"Panic threshhold of {k} attempts reached with {len_list} offsets from {len_servers} servers in pool")
+def panic_threshold_reached(k, len_list, len_servers):
+    logger.error(f"Panic threshold of {k} attempts reached with {len_list} offsets from {len_servers} servers in pool")
 
 def get_offset(total_servers_needed, fraction_to_use, max_retries, spread_limit, err=0.0):
-    if len(QUERY_SERVERS) != total_servers_needed:
+    if len(QUERY_SERVERS) < total_servers_needed:
         get_random_server_list_from_pool(total_servers_needed)
 
     retries = 0
@@ -120,27 +144,28 @@ def get_offset(total_servers_needed, fraction_to_use, max_retries, spread_limit,
             return None, None, None
 
         min_offset = min(offset_list, key=math.fabs)
+        offset_range = max(offset_list) - min(offset_list)
 
         # check whether all surviving samples are "close"
         avg_offset = sum(offset_list) / len(offset_list)
         if (
-                (math.fabs(max(offset_list) - min(offset_list)) <= 2 * spread_limit) and
+                (offset_range <= 2 * spread_limit) and
                 (math.fabs(avg_offset) <= spread_limit * 2 + err)
         ):
             return avg_offset, trimmed_servers, min_offset
         retries += 1
         print(")failure %d: %f > %f and/or %f > %f" % (
-            retries, math.fabs(max(offset_list) - min(offset_list)), 2 * spread_limit, math.fabs(avg_offset), spread_limit * 2 + err))
+            retries, offset_range, 2 * spread_limit, math.fabs(avg_offset), spread_limit * 2 + err))
         get_random_server_list_from_pool(total_servers_needed)
     # PANIC
-    panic_threshhold_reached(max_retries, len(offset_list), len(trimmed_servers))
+    panic_threshold_reached(max_retries, len(offset_list), len(trimmed_servers))
 
     # The randomly selected servers failed to get a good response
     # so we try again with the whole pool and try and get a good selected average
     # unlike the range limit check above it is not checked for the limits
 
     offset_dict, trimmed_servers = get_offset_list_from_pool(SERVERS_POOL, fraction_to_use, err)
-    if offset_dict == None or len(offset_dict) == 0:
+    if offset_dict is None or len(offset_dict) == 0:
         return None, None, None
 
     avg_offset = sum(offset_list) / float(len(offset_list))
@@ -153,21 +178,23 @@ def get_offset_quick(total_servers_needed, fraction_to_use, max_retries, spread_
 
     retries = 0
     while retries < max_retries:
-
         # query chosen servers
-        offsets, trimmed_servers = get_offset_list_from_pool(QUERY_SERVERS, fraction_to_use, 0)
-        if offsets != None and len(offsets) != 0:
+        offset_list, trimmed_servers = get_offset_list_from_pool(QUERY_SERVERS, fraction_to_use, 0)
+        if offset_list is not None and len(offset_list) > 0:
         # check whether all surviving samples are "close"
-            avg_offset = sum(offsets) / len(offsets)
-            if (math.fabs(max(offsets) - min(offsets)) <= 2 * spread_limit):
+            avg_offset = sum(offset_list) / len(offset_list)
+            offset_range = max(offset_list) - min(offset_list)
+            if offset_range <= 2 * spread_limit:
                 return avg_offset
+        else:
+            offset_range = 0.0
 
         # Failed so we need to try again
         retries += 1
-        print("failure %d: %f > %f" % (retries, math.fabs(max(offsets) - min(offsets)), 2 * spread_limit))
+        print("failure %d: %f > %f" % (retries, offset_range, 2 * spread_limit))
         get_random_server_list_from_pool(total_servers_needed)
     # PANIC
-    panic_threshhold_reached(max_retries, len(offsets), len(offsets))
+    panic_threshold_reached(max_retries, len(offset_list), len(trimmed_servers))
 
     offset_list, _ = get_offset_list_from_pool(SERVERS_POOL, fraction_to_use, 0)
     if offset_list == None or len(offset_list) == 0:
@@ -185,14 +212,12 @@ def update_loop(update_query_interval, query_interval, server_pool_path, state_p
     delta = 0.0
     last_offset = 0.0
     STATE_PATH = state_path
-    SERVERS_POOL = khronos_utils.read_server_list(server_pool_path)
+
     r = int(update_query_interval / query_interval)
     print("r=", r)
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     file_name = timestamp + "_khronos_offsets.csv"
-    file_path = Path(output_path)/ file_name
-    if conf_path:
-        os.system("cp %s %s" % (conf_path, file_path[:-3] + "json"))
+    file_path = Path(output_path) / file_name
     out = khronos_utils.open_write_file(file_path, "w")
     if start_quick:
         print("start quick")
@@ -206,7 +231,7 @@ def update_loop(update_query_interval, query_interval, server_pool_path, state_p
         for i in range(r):
             loop_count += 1
             offset, _, min_offset = get_offset(query_args["total_servers_needed"], query_args["fraction_to_use"], query_args["max_tries"], query_args["spread_limit"], query_args["err"])
-            if offset == None:
+            if offset is None:
                 logger.error("offset not available")
             else:
                 if min_offset is not None and math.fabs(delta) < 0.001:
@@ -227,20 +252,12 @@ def update_loop(update_query_interval, query_interval, server_pool_path, state_p
                 last_offset = offset
 
             if loop_count % 10 == 0:
-                khronos_utils.report_statistics()
+                khronos_analysis.report_statistics()
+                # khronos_analysis.report_excluded_offset_analysis()
+                ''' If we have servers that are not providing valid response, remove them'''
+                remove_failed_servers(SERVERS_POOL, QUERY_SERVERS)
 
             time.sleep(query_interval)
-
-# sudo python /media/sf_temp/khronos_d.py -m 5 -d 0.2 -p /media/sf_temp/khronos_servers_pool.json -S /media/sf_temp/current_s.json
-# sudo python /media/sf_temp/khronos_d.py -m 5 -d 0.2 -p /media/sf_temp/khronos_servers_pool.json -S /media/sf_temp/current_s.json -w 0.025 -e 0.05 -o /media/sf_temp/
-# sudo python /media/sf_temp/khronos_d.py -m 5 -d 0.2 -p /media/sf_temp/khronos_servers_pool_0.json -S /media/sf_temp/current_s_0.json -w 0.025 -e 0.05 -o /media/sf_temp/ -n 200 -M 300 -C -Z /media/sf_temp/zone_pools.json
-# sudo service ntp stop
-# sudo python khronos_d.py -m 12 -d 0.34  -w 0.025 -e 0.05 -n 500 -M 36000 -C -z usa -p khronos_servers_pool_oragon.json
-# sudo python khronos_d.py -m 12 -d 0.34 -n 500 -M 36000 -C -z uk -p khronos_servers_pool_oragon.json -u 3600 -q 60
-# sudo python khronos_d.py -m 12 -d 0.34 -z usa -p khronos_servers_pool_oragon.json -u 3600 -q 60
-# sudo python khronos_d.py -m 12 -d 0.34 -n 500 -M 36000 -C -z germany -p khronos_servers_pool_frankfurt.json -u 3600 -q 60
-# sudo python khronos_d.py -m 12 -d 0.34 -n 500 -M 36000 -C -z usa -p khronos_servers_pool_virginia.json -u 3600 -q 60
-# sudo python khronos_d.py -m 12 -d 0.34 -n 500 -M 36000 -C -z uk -p khronos_servers_pool_london.json -u 3600 -q 60
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
@@ -265,7 +282,7 @@ def parse_arguments():
     parser.add_argument("-D", "--dont_start_quick", action="store_true",
                         help="dont start with full update (might lead to panic on first update)")
     parser.add_argument("-c", "--conf_path", default=None,
-                        help="path for json of khronos configuration (overides all other params)")
+                        help="path for json of khronos configuration (overrides all other params)")
     parser.add_argument("-C", "--save_conf_path", default="config.json",
                         help="path to save khronos configuration")
     parser.add_argument("-o", "--output_path", default="./",
@@ -295,6 +312,7 @@ def parse_arguments():
         query_interval=args.query_interval,
         server_pool_path=args.server_pool_path,
         zone_pools_path=args.zone_pools_path,
+        conf_path=args.conf_path,
         state_path=args.state,
         start_quick=not args.dont_start_quick,
         output_path=args.output_path,
@@ -312,8 +330,8 @@ def parse_arguments():
 
 if __name__ == "__main__":
 
-    logger = khronos_utils.init_logging("khronos") # Start the logger
     config = parse_arguments() # get the arguments
+    logger = khronos_utils.init_logging("khronos", "khronos_" + config["zone"] + ".log") # Start the logger
 
     if not os.path.isfile(config["server_pool_path"]) or config["force_calibration"]:
         calibration_conf = dict(
@@ -323,6 +341,6 @@ if __name__ == "__main__":
             zone=config["zone"],
             max_time_secs=config["max_calibration_time"]
         )
-        calibration(**calibration_conf)
+        initialize_server_pool(**calibration_conf)
 
     update_loop(**config)

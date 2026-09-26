@@ -1,4 +1,4 @@
-'''********************************************************************
+"""********************************************************************
 *                                                                     *
 * Copyright (c) Network Time Foundation 2026                          *
 *                                                                     *
@@ -27,14 +27,15 @@
 * USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH    *
 * DAMAGE.                                                             *
 ***********************************************************************
-'''
-# import ipaddress
+"""
+
 import os
 import json
 import math
 import logging
 import time
 from collections import defaultdict
+from typing import Any
 
 import colorlog
 import socket
@@ -43,9 +44,10 @@ from ntplibrary import NTPClient, NTPException, NTP
 
 _NTP_EXPECTED_VERSION = 4
 
-no_response_count = {}
-tracker = defaultdict(lambda: {"no_response_count": 0, "fail_count": 0, "request_count": 0})
+tracker = defaultdict(lambda: {"no_response_count": 0, "fail_count": 0, "response_count": 0, "removed": False})
 error_types = defaultdict(lambda: defaultdict(int))
+server_state = defaultdict(lambda: defaultdict(Any))
+
 last_offset = {}
 LEAP_NOTINSYNC = 3
 MAX_SERVER_FAILURES = 10
@@ -56,7 +58,7 @@ def init_logging(log_name, log_file = 'khronos.log'):
     logger.setLevel(logging.DEBUG)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)-8s - %(message)s')
     handler = colorlog.StreamHandler()
-    coloredFormatter = colorlog.ColoredFormatter(
+    colored_formatter = colorlog.ColoredFormatter(
         # Format string using the special %(log_color)s variable
         fmt="%(log_color)s%(asctime)s - %(name)s - %(levelname)-8s - %(message)s",
         log_colors={
@@ -67,7 +69,7 @@ def init_logging(log_name, log_file = 'khronos.log'):
             'CRITICAL': 'bold_red',
         }
     )
-    handler.setFormatter(coloredFormatter)
+    handler.setFormatter(colored_formatter)
     logger = colorlog.getLogger(log_name)
     logger.addHandler(handler)
     file_handler = logging.FileHandler(filename=log_file, mode='a')  # define where the log will be written.  mode parameter will determine whether to append to log if it exists ('a') or write over file ('w').
@@ -75,10 +77,14 @@ def init_logging(log_name, log_file = 'khronos.log'):
     logger.addHandler(file_handler)
     return logger
 
+def get_logger():
+    return logger
+
+def remove_server(ip):
+    tracker[ip]["removed"] = True
+
 def add_to_no_response_count(ip):
-    if not ip in no_response_count:
-        no_response_count[ip] = 0
-    no_response_count[ip] += 1
+
     tracker[ip]["no_response_count"] += 1
     tracker[ip]["fail_count"] += 1
     if tracker[ip]["no_response_count"] >= MAX_SERVER_FAILURES:
@@ -86,23 +92,19 @@ def add_to_no_response_count(ip):
 
 def remove_from_no_response_count(ip):
     logger.info(f"Retry succeeded: {ip} server responded, failed count: {tracker[ip]["no_response_count"]}")
-    no_response_count[ip] = 0
     tracker[ip]["no_response_count"] = 0
 
-def add_request_count(ip):
-        tracker[ip]["request_count"] += 1
+def add_response_count(ip):
+        tracker[ip]["response_count"] += 1
 
-def report_statistics():
-    logger.info(f"Statistics:")
-    for ip, value in tracker.items():
-        logger.info(f"{ip}: {value}")
+def get_tracker():
+    return tracker
 
-    '''Report errors'''
-    logger.info(f"Errors Reported:")
-    for err, value in error_types.items():
-        logger.info(f"\t{err}")
-        for ip, count in value.items():
-            logger.info(f"\t\tIP: {ip} count: {count}")
+def get_server_state():
+    return server_state
+
+def get_error_types():
+    return error_types
 
 def read_server_list(file_to_load):
     try:
@@ -116,6 +118,10 @@ def read_server_list(file_to_load):
         logger.error(f"The file {file_to_load} contains invalid JSON.")
         return None
 
+def get_dns_names_for_zone(zone_pools_path, zone):
+    dns_name_list = json.load(open(zone_pools_path, 'r'))
+    return dns_name_list[zone]
+
 def lookup_dns_addresses(dns_names):
     addresses = set()
     for dns_name in dns_names:
@@ -128,7 +134,7 @@ def lookup_dns_addresses(dns_names):
             continue
     return addresses
 
-def retrieve_server_addresses(zone_dns_names, pool_size, max_time_secs):
+def retrieve_server_addresses(zone_dns_names, pool_size, max_time_secs=2*60*60):
 
     # DNS names to retrieve ip addresses
     for dns_name in zone_dns_names:
@@ -146,6 +152,7 @@ def retrieve_server_addresses(zone_dns_names, pool_size, max_time_secs):
             time.sleep(60)
         current_time = time.time()
 
+    logger.info(f"Total of {len(final_server_list)} servers collected")
     return final_server_list
 
 def open_write_file(file_to_save, file_permissions):
@@ -193,24 +200,40 @@ def validate_synchonized(response, ip):
 def server_version_check(response, ip):
     return validate_failure_checks(ip, response.version, response.version == _NTP_EXPECTED_VERSION, "version")
 
-def validate_responses(results):
+def valid_response(result, ip):
+    if result.has_kiss_code:
+        logger.error(f"Kiss code {result.kiss_name} received from {ip}")
+        return False
+    return (validate_response_size(result, ip)
+            and not result.has_kiss_code
+            and valid_stratum(result, ip)
+            and validate_synchonized(result, ip)
+            and validate_response_mode(result, ip)
+            and validate_origin_timestamp(result, ip))
 
+def update_server_state(result, ip):
+    server_state[ip]["Stratum"] = result.stratum
+    server_state[ip]["Version"] = result.version
+    server_state[ip]["KissCode"] = result.has_kiss_code
+    server_state[ip]["Mode"] = result.mode
+    server_state[ip]["Poll"] = result.poll
+    server_state[ip]["Precision"] = result.precision
+    server_state[ip]["Offset"] = result.offset
+    server_state[ip]["Round_Trip_Time"] = result.Rtt
+    server_state[ip]["ReferenceId"] = result.ref_id
+
+    if result.Rtt > 5.0:
+        print(f"{ip} Round trip time: {result.Rtt} > 5.0")
+
+def process_responses(results):
     responses = dict()
     for ip, result in results.items():
-        add_request_count(ip)
+        update_server_state(result, ip)
+        add_response_count(ip)
         server_version_check(result, ip)
-        if result.has_kiss_code:
-            logger.error(f"Kiss code {result.kiss_name} received from {ip}")
-        if (validate_response_size(result, ip)
-                and not result.has_kiss_code
-                and valid_stratum(result, ip)
-                and validate_synchonized(result, ip)
-                and validate_response_mode(result, ip)
-                and validate_origin_timestamp(result, ip)):
+        if valid_response(result, ip):
             responses[ip] = result
             check_offset(result, ip)
-
-
         else:
             logger.warning(f"Invalid response from {ip}")
     return responses
@@ -282,7 +305,7 @@ def req_multiple_server_offsets(servers):
 
     results = req_multiple_server_results(servers)
 
-    responses = validate_responses(results)
+    responses = process_responses(results)
     return {ip: responses[ip].offset for ip in servers if ip in responses}
 
 def get_offset_simple(w, err, servers):
