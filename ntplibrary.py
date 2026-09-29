@@ -280,6 +280,8 @@ class NTPPacket(object):
         self.has_kiss_code = kiss_code_check(self)
         if self.has_kiss_code:
             self.kiss_name = get_KOD_name(self.ref_id)
+        else:
+            self.kiss_name = None
 
 def kiss_code_check(response):
     return response.stratum == 16 and response.leap == 3 and response.mode == 4
