@@ -96,7 +96,10 @@ def report_statistics():
         else:
             fail_percent = 0
         if fail_percent > 10.0:
-            logger.info(f"{ip}: {value} ({fail_percent}% failed) Stratum: {server_state[ip]["Stratum"]} RefId: {server_state[ip]["ReferenceId"]}")
+            if server_state[ip]["Stratum"] is not None and server_state[ip]["ReferenceId"] is not None:
+                logger.info(f"{ip}: {value} ({fail_percent}% failed) Stratum: {server_state[ip]["Stratum"]} RefId: {server_state[ip]["ReferenceId"]}")
+            else:
+                logger.info(f"{ip}: {value} ({fail_percent}% failed)")
 
     recommendations = recommend_server_removals(tracker, 15, .20)
     if recommendations:

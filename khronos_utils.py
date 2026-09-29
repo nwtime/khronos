@@ -40,11 +40,12 @@ from typing import Any
 import colorlog
 import socket
 
+import abh_monitor_score
 from ntplibrary import NTPClient, NTPException, NTP
 
 _NTP_EXPECTED_VERSION = 4
 
-tracker = defaultdict(lambda: {"no_response_count": 0, "fail_count": 0, "response_count": 0, "removed": False})
+tracker = defaultdict(lambda: {"no_response_count": 0, "fail_count": 0, "response_count": 0, "removed": False, "abs_score" : 0.0, "abs_step" : 0.0, "score_min" : 0.0, "score_max" : 0.0})
 error_types = defaultdict(lambda: defaultdict(int))
 server_state = defaultdict(lambda: defaultdict(Any))
 
@@ -215,6 +216,7 @@ def update_server_state(result, ip):
     server_state[ip]["Stratum"] = result.stratum
     server_state[ip]["Version"] = result.version
     server_state[ip]["KissCode"] = result.has_kiss_code
+    server_state[ip]["KissName"] = result.kiss_name
     server_state[ip]["Mode"] = result.mode
     server_state[ip]["Poll"] = result.poll
     server_state[ip]["Precision"] = result.precision
@@ -225,6 +227,14 @@ def update_server_state(result, ip):
     if result.Rtt > 5.0:
         print(f"{ip} Round trip time: {result.Rtt} > 5.0")
 
+def update_monitor_score(result, ip):
+    global tracker
+    score, step = abh_monitor_score.calculate_score(result)
+    tracker[ip]["abs_score"] = score
+    tracker[ip]["score_min"] = min(score, tracker[ip]["score_min"])
+    tracker[ip]["score_max"] = max(score, tracker[ip]["score_max"])
+    tracker[ip]["abs_step"] = step
+
 def process_responses(results):
     responses = dict()
     for ip, result in results.items():
@@ -234,7 +244,14 @@ def process_responses(results):
         if valid_response(result, ip):
             responses[ip] = result
             check_offset(result, ip)
+            update_monitor_score(result, ip)
+
         else:
+            score, step = abh_monitor_score.invalid_response_score()
+            tracker[ip]["abs_score"] = score
+            tracker[ip]["score_min"] = min(score, tracker[ip]["score_min"])
+            tracker[ip]["score_max"] = max(score, tracker[ip]["score_max"])
+            tracker[ip]["abs_step"] = step
             logger.warning(f"Invalid response from {ip}")
     return responses
 
@@ -249,6 +266,11 @@ def check_offset(response, ip):
 
 def add_failure(ip, err, err_msg):
     add_to_no_response_count(ip)
+    score, step = abh_monitor_score.no_response_score()
+    tracker[ip]["abs_score"] = score
+    tracker[ip]["score_min"] = min(score, tracker[ip]["score_min"])
+    tracker[ip]["score_max"] = max(score, tracker[ip]["score_max"])
+    tracker[ip]["abs_step"] = step
     error_types[str(err)][ip] += 1
     logger.warning(f"{err_msg}{ip}: {str(err)}")
 
