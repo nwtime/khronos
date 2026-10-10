@@ -28,6 +28,7 @@
 * DAMAGE.                                                             *
 ***********************************************************************
 """
+import khronos_reports
 
 '''Copyright (c) <2019> <Neta Rozen Schiff>
 
@@ -252,7 +253,8 @@ def update_loop(update_query_interval, query_interval, server_pool_path, state_p
                 last_offset = offset
 
             if loop_count % 10 == 0:
-                khronos_analysis.report_statistics()
+                khronos_utils.prepare_reports()
+                khronos_reports.report_statistics()
                 # khronos_analysis.report_excluded_offset_analysis()
                 ''' If we have servers that are not providing valid response, remove them'''
                 remove_failed_servers(SERVERS_POOL, QUERY_SERVERS)
