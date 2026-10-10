@@ -31,6 +31,7 @@
 from collections import defaultdict, Counter
 
 import khronos_utils
+import ntp_calculations
 
 excluded_offset_analysis = {}
 removals = defaultdict()
@@ -80,67 +81,6 @@ def recommend_server_removals(tracker, min_attempts=15, failure_rate_threshold=0
         reverse=True,
     )
 
-
-def report_statistics():
-
-    logger  = khronos_utils.get_logger()
-    tracker = khronos_utils.get_tracker()
-    error_types = khronos_utils.get_error_types()
-    server_state = khronos_utils.get_server_state()
-
-    logger.info(f"Larger Failure Statistics:")
-    for ip, value in tracker.items():
-        attempts = value["response_count"] + value["fail_count"]
-        if attempts:
-            fail_percent = round(value["fail_count"] / attempts * 100, 2)
-        else:
-            fail_percent = 0
-        if fail_percent > 10.0:
-            if server_state[ip]["Stratum"] is not None and server_state[ip]["ReferenceId"] is not None:
-                logger.info(f"{ip}: {value} ({fail_percent}% failed) Stratum: {server_state[ip]["Stratum"]} RefId: {server_state[ip]["ReferenceId"]}")
-            else:
-                logger.info(f"{ip}: {value} ({fail_percent}% failed)")
-
-    recommendations = recommend_server_removals(tracker, 15, .20)
-    if recommendations:
-        logger.info("Recommended Server Removals:")
-        for recommendation in recommendations:
-            logger.info(
-                f"\t{recommendation['ip']}: "
-                f"{recommendation['failure_rate']}% failed "
-                f"({recommendation['failures']}/"
-                f"{recommendation['attempts']} attempts)")
-
-    '''Report errors'''
-    logger.info(f"Errors Reported:")
-    for err, value in error_types.items():
-        logger.info(f"\t{err}")
-        for ip, count in value.items():
-            logger.info(f"\t\tIP: {ip} count: {count}")
-
-    '''Report error type counts'''
-    logger.info(f"Error Types Reported:")
-    for err, value in error_types.items():
-        logger.info(f"\t{err}: {sum(value.values())}")
-
-    ''' Report removals'''
-    logger.info(f"Removals Reported:")
-    if len(removals) == 0:
-        logger.info(f"\tNo Removals Reported")
-    else:
-        for ip, value in removals.items():
-            logger.info(f"\t{ip}: {value}")
-
-    ''' Report server stratum'''
-    logger.info(f"Server Stratum Reported:")
-    stratum_list = Counter(info["Stratum"] for info in server_state.values() if "Stratum" in info)
-    for stratum, count in sorted(stratum_list.items()):
-        logger.info(f"\tStratum {stratum}: count: {count}")
-
-    logger.info(f"Stratum 1 Servers:")
-    for ip, value in server_state.items():
-        if value["Stratum"] == 1:
-            logger.info(f"\tIP: {ip} Stratum 1: Reference: {value['ReferenceId']}")
 
 ''' Analyze Excluded Offsets '''
 

@@ -41,7 +41,8 @@ import colorlog
 import socket
 
 import abh_monitor_score
-from ntplibrary import NTPClient, NTPException, NTP
+import ntp_calculations
+from ntplibrary import NTPClient, NTPException, NTP, NTPStats
 
 _NTP_EXPECTED_VERSION = 4
 
@@ -120,8 +121,12 @@ def read_server_list(file_to_load):
         return None
 
 def get_dns_names_for_zone(zone_pools_path, zone):
-    dns_name_list = json.load(open(zone_pools_path, 'r'))
-    return dns_name_list[zone]
+
+    dns_name_list = []
+    for i in range(4):  # Retry up to 3 times
+        dns_name = str(i) + "." + zone + ".pool.ntp.org"
+        dns_name_list.append(dns_name)
+    return dns_name_list
 
 def lookup_dns_addresses(dns_names):
     addresses = set()
@@ -257,12 +262,17 @@ def process_responses(results):
 
 def check_offset(response, ip):
     this_offset = response.offset
+    this_delay = response.Rtt
     if not ip in last_offset:
         last_offset[ip] = this_offset
     else:
+        ntp_calculations.add_offset(ip, this_offset, this_delay)
         change = this_offset - last_offset[ip]
         last_offset[ip] = this_offset
         # print(f"{ip} offset changed by {change}")
+
+def prepare_reports():
+    ntp_calculations.calculate_jitter_for_servers(tracker, server_state)
 
 def add_failure(ip, err, err_msg):
     add_to_no_response_count(ip)
@@ -274,7 +284,7 @@ def add_failure(ip, err, err_msg):
     error_types[str(err)][ip] += 1
     logger.warning(f"{err_msg}{ip}: {str(err)}")
 
-def request_packet(ip, retried):
+def request_packet(ip, retried) -> NTPStats:
 
     ntp_client = NTPClient()
 

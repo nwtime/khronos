@@ -345,7 +345,7 @@ class NTPClient(object):
         """Constructor."""
         pass
 
-    def request(self, host, version=2, mode=3, port="ntp", timeout=5):
+    def request(self, host, version=2, mode=3, port="ntp", timeout=5) -> NTPStats:
         """Query a NTP server.
 
         Parameters:
@@ -485,7 +485,7 @@ def leap_to_text(leap):
     if leap in NTP.LEAP_TABLE:
         return NTP.LEAP_TABLE[leap]
     else:
-        raise NTPException("Invalid leap indicator.")
+        raise NTPException(f"Invalid leap indicator {leap}")
 
 
 def mode_to_text(mode):
@@ -503,7 +503,7 @@ def mode_to_text(mode):
     if mode in NTP.MODE_TABLE:
         return NTP.MODE_TABLE[mode]
     else:
-        raise NTPException("Invalid mode.")
+        raise NTPException(f"Invalid mode {mode}")
 
 
 def stratum_to_text(stratum):
@@ -522,10 +522,10 @@ def stratum_to_text(stratum):
         return NTP.STRATUM_TABLE[stratum] % stratum
     elif 1 < stratum < 16:
         return "secondary reference (%s)" % stratum
-    elif stratum == 16:
+    elif stratum == 16 or stratum == 0:
         return "unsynchronized (%s)" % stratum
     else:
-        raise NTPException("Invalid stratum or reserved.")
+        raise NTPException(f"Invalid stratum or reserved {stratum}")
 
 def get_ref_id_fields(ref_id):
     """Return a list of fields required for a reference clock.
@@ -566,7 +566,7 @@ def ref_id_to_text(ref_id, stratum=2):
     elif 2 <= stratum < 16:
         return "%d.%d.%d.%d" % fields
     else:
-        raise NTPException("Invalid stratum.")
+        raise NTPException(f"Invalid stratum {stratum}")
 
 def ref_id_to_name(ref_id, stratum=2):
     """Convert a reference clock identifier to text according to its stratum.
@@ -590,4 +590,4 @@ def ref_id_to_name(ref_id, stratum=2):
     elif 2 <= stratum < 16:
         return "%d.%d.%d.%d" % fields
     else:
-        raise NTPException("Invalid stratum.")
+        raise NTPException(f"Invalid stratum {stratum}")
