@@ -28,7 +28,6 @@
 * DAMAGE.                                                             *
 ***********************************************************************
 """
-import khronos_reports
 
 '''Copyright (c) <2019> <Neta Rozen Schiff>
 
@@ -51,63 +50,30 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.'''
 
 import os
-import random
 import math
 import json
 import argparse
 from pathlib import Path
 
+import dns_utils
+import khronos_reports
 import khronos_analysis
 import khronos_utils
 import time
 
-DNS_ZONE_NAMES = []
 QUERY_SERVERS = []
 SERVERS_POOL = []
-STATE_PATH = 'current_s.json'
+CURRENT_PATH = 'current_s.json'
 servers_available = True
 
-def initialize_server_pool(pool_size, server_pool_path, zone_pools_path, zone, max_time_secs=2 * 60 * 60):
+def initialize_server_pool(pool_size, zone, max_time_secs=2 * 60 * 60):
     global SERVERS_POOL
-    global DNS_ZONE_NAMES
 
     logger.info(f"Starting to retrieve server pool ip addresses from {zone} zone list")
-    DNS_ZONE_NAMES = khronos_utils.get_dns_names_for_zone(zone_pools_path, zone)
+    dns_utils.get_dns_names_for_zone(zone)
 
     ''' Set up the server pool '''
-    SERVERS_POOL = khronos_utils.retrieve_server_addresses(DNS_ZONE_NAMES, pool_size, max_time_secs)
-
-    json.dump(list(SERVERS_POOL), open(server_pool_path, 'w'),
-            indent=4, separators=(',', ': '))
-
-def remove_failed_servers(pool_list, query_list):
-    removals = khronos_analysis.get_removals()
-    for ip in removals:
-        if ip in pool_list:
-            pool_list.remove(ip)
-        if ip  in query_list:
-            query_list.remove(ip)
-        logger.info(f"Removed {ip} from server list")
-        khronos_utils.remove_server(ip)
-    khronos_analysis.delete_removals()
-
-
-def get_random_server_list_from_pool(total_servers_needed):
-    global QUERY_SERVERS
-    global SERVERS_POOL
-
-    ''' Make sure to remove servers that have proven to be not reliable sources '''
-    remove_failed_servers(SERVERS_POOL, QUERY_SERVERS)
-
-    ''' If we don't have enough ask DNS for more servers '''
-    if total_servers_needed > len(SERVERS_POOL):
-        SERVERS_POOL = khronos_utils.retrieve_server_addresses(DNS_ZONE_NAMES, total_servers_needed)
-
-    server_indices = random.sample(range(len(SERVERS_POOL)), total_servers_needed)
-    server_list = list(SERVERS_POOL)
-    QUERY_SERVERS = [server_list[idx] for idx in server_indices]
-    json.dump(QUERY_SERVERS, open(STATE_PATH, 'w'), indent=4, separators=(',', ': '))
-
+    SERVERS_POOL = dns_utils.retrieve_server_addresses(pool_size, max_time_secs)
 
 def get_offset_list_from_pool(server_list, fraction_to_use, err=0.0):
     global servers_available
@@ -134,8 +100,7 @@ def panic_threshold_reached(k, len_list, len_servers):
     logger.error(f"Panic threshold of {k} attempts reached with {len_list} offsets from {len_servers} servers in pool")
 
 def get_offset(total_servers_needed, fraction_to_use, max_retries, spread_limit, err=0.0):
-    if len(QUERY_SERVERS) < total_servers_needed:
-        get_random_server_list_from_pool(total_servers_needed)
+    QUERY_SERVERS = dns_utils.get_random_server_list_from_pool(total_servers_needed)
 
     retries = 0
     while retries < max_retries:
@@ -157,7 +122,7 @@ def get_offset(total_servers_needed, fraction_to_use, max_retries, spread_limit,
         retries += 1
         print(")failure %d: %f > %f and/or %f > %f" % (
             retries, offset_range, 2 * spread_limit, math.fabs(avg_offset), spread_limit * 2 + err))
-        get_random_server_list_from_pool(total_servers_needed)
+        QUERY_SERVERS = dns_utils.get_random_server_list_from_pool(total_servers_needed)
     # PANIC
     panic_threshold_reached(max_retries, len(offset_list), len(trimmed_servers))
 
@@ -174,8 +139,7 @@ def get_offset(total_servers_needed, fraction_to_use, max_retries, spread_limit,
 
 
 def get_offset_quick(total_servers_needed, fraction_to_use, max_retries, spread_limit):
-    if len(QUERY_SERVERS) != total_servers_needed:
-        get_random_server_list_from_pool(total_servers_needed)
+    QUERY_SERVERS = dns_utils.get_random_server_list_from_pool(total_servers_needed)
 
     retries = 0
     while retries < max_retries:
@@ -193,7 +157,7 @@ def get_offset_quick(total_servers_needed, fraction_to_use, max_retries, spread_
         # Failed so we need to try again
         retries += 1
         print("failure %d: %f > %f" % (retries, offset_range, 2 * spread_limit))
-        get_random_server_list_from_pool(total_servers_needed)
+        QUERY_SERVERS = dns_utils.get_random_server_list_from_pool(total_servers_needed)
     # PANIC
     panic_threshold_reached(max_retries, len(offset_list), len(trimmed_servers))
 
@@ -207,7 +171,7 @@ def update_loop(update_query_interval, query_interval, server_pool_path, state_p
                 conf_path=None, **query_args):
     global QUERY_SERVERS
     global SERVERS_POOL
-    global STATE_PATH
+    global CURRENT_PATH
     loop_count = 0
     thresh = 0.0005
     delta = 0.0
@@ -257,7 +221,7 @@ def update_loop(update_query_interval, query_interval, server_pool_path, state_p
                 khronos_reports.report_statistics()
                 # khronos_analysis.report_excluded_offset_analysis()
                 ''' If we have servers that are not providing valid response, remove them'''
-                remove_failed_servers(SERVERS_POOL, QUERY_SERVERS)
+                dns_utils.remove_failed_servers()
 
             time.sleep(query_interval)
 
@@ -302,7 +266,7 @@ def parse_arguments():
     args = parser.parse_args()
 
     if args.conf_path:
-        config = khronos_utils.read_server_list(args.conf_path)
+        return khronos_utils.read_server_list(args.conf_path)
     else:
         config = dict(
         total_servers_needed=args.query_size,
@@ -334,12 +298,11 @@ if __name__ == "__main__":
 
     config = parse_arguments() # get the arguments
     logger = khronos_utils.init_logging("khronos", "khronos_" + config["zone"] + ".log") # Start the logger
+    dns_utils.init_dns(logger, config["state_path"], config["server_pool_path"]) # Initialize the DNS utilities
 
     if not os.path.isfile(config["server_pool_path"]) or config["force_calibration"]:
         calibration_conf = dict(
             pool_size=config["pool_size"],
-            server_pool_path=config["server_pool_path"],
-            zone_pools_path=config["zone_pools_path"],
             zone=config["zone"],
             max_time_secs=config["max_calibration_time"]
         )

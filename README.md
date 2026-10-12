@@ -2,6 +2,14 @@
 This project provides a khronos_d, a Khronos client which is used as a watchdog for improving NTPv4 client security against powerful attackers
 who are in direct control of a large number of NTP servers (see details in [Khronos paper](https://www.ndss-symposium.org/wp-content/uploads/2018/02/ndss2018_02A-2_Deutsch_paper.pdf) and in [Khronos IETF RFC](https://datatracker.ietf.org/doc/rfc9523/)).
 
+Khronos uses the NTPv4 protocol to query a pool of NTP servers, and then uses a robust statistical method to filter outliers and compute a reliable time offset. 
+The client can be configured with various parameters, such as the number of servers to query, the filtering bounds, and the panic threshold.
+The [pool.ntp.org](pool.ntp.org) service is used to provide a pool of NTP servers for the client to query. 
+The client can also be configured to use a specific zone, such as Europe or the UK, to query servers from that region. 
+For country-specific zones, see [ccTLD](https://www.worldstandards.eu/other/tlds/) for the list of country-level top-level domains (ccTLDs).
+The country-level top-level domain (ccTLD) can be used to query the pool of NTP servers for that country. Note however that an entry for that country code in the pool.ntp.org DNS may not exist for some countries.
+Continent-wide zones are also available, such as Europe, Asia, and North America as well as global. See [ntpool.org](https://www.ntppool.org/zone/@) for more information on the available zones and their corresponding DNS entries.
+
 Moreover, an end-to-end experiment environment is provided.
 
 This repository consists of two Khronos client implementations: (i) python implementation (in the master branch), and (ii) C implementation (in the ''final project'') branch. 
@@ -42,8 +50,7 @@ where the optional arguments are as follows:
  - *-o OUTPUT_PATH, --output_path OUTPUT_PATH* the path output directory
 - *-n POOL_SIZE, --pool_size POOL_SIZE* the number of servers in the pool
 - *-Z ZONE_POOLS_PATH, --zone_pools_path ZONE_POOLS_PATH* url per state
-- *-z ZONE, --zone ZONE  zone for calibration (default:global) [global,europe,uk,usa,germany,singapore,australia,japan,asia,south_ame
-                        rica]*
+- *-z ZONE, --zone ZONE  zone for calibration (default:global) [global,europe,uk,usa,germany,singapore,australia,japan,asia,south_america]*
 - *-C, --force_calibration* is used for force calibration (and generating pool file)
 - *-M MAX_CALIBRATION_TIME, --max_calibration_time MAX_CALIBRATION_TIME* the max calibration time (in seconds).
 

@@ -33,7 +33,6 @@ import os
 import json
 import math
 import logging
-import time
 from collections import defaultdict
 from typing import Any
 
@@ -46,7 +45,7 @@ from ntplibrary import NTPClient, NTPException, NTP, NTPStats
 
 _NTP_EXPECTED_VERSION = 4
 
-tracker = defaultdict(lambda: {"no_response_count": 0, "fail_count": 0, "response_count": 0, "removed": False, "abs_score" : 0.0, "abs_step" : 0.0, "score_min" : 0.0, "score_max" : 0.0})
+tracker = defaultdict(lambda: {"Removed": False, "no_response_count": 0, "fail_count": 0, "response_count": 0,  "abs_score" : 0.0, "abs_step" : 0.0, "score_min" : 0.0, "score_max" : 0.0})
 error_types = defaultdict(lambda: defaultdict(int))
 server_state = defaultdict(lambda: defaultdict(Any))
 
@@ -83,7 +82,7 @@ def get_logger():
     return logger
 
 def remove_server(ip):
-    tracker[ip]["removed"] = True
+    tracker[ip]["Removed"] = True
 
 def add_to_no_response_count(ip):
 
@@ -119,47 +118,6 @@ def read_server_list(file_to_load):
     except json.JSONDecodeError:
         logger.error(f"The file {file_to_load} contains invalid JSON.")
         return None
-
-def get_dns_names_for_zone(zone_pools_path, zone):
-
-    dns_name_list = []
-    for i in range(4):  # Retry up to 3 times
-        dns_name = str(i) + "." + zone + ".pool.ntp.org"
-        dns_name_list.append(dns_name)
-    return dns_name_list
-
-def lookup_dns_addresses(dns_names):
-    addresses = set()
-    for dns_name in dns_names:
-        try:
-            addr_info = socket.getaddrinfo(dns_name, None)
-            ips = set(info[4][0] for info in addr_info)
-            addresses |= ips
-        except socket.gaierror:
-            logger.error(f"Failed to resolve {dns_name}")
-            continue
-    return addresses
-
-def retrieve_server_addresses(zone_dns_names, pool_size, max_time_secs=2*60*60):
-
-    # DNS names to retrieve ip addresses
-    for dns_name in zone_dns_names:
-        logger.debug(f"Lookup for {dns_name}")
-
-    final_server_list = set()
-    iterations = 1
-    start = time.time()
-    current_time = start
-    while len(final_server_list) < pool_size and current_time - start < max_time_secs:
-        final_server_list |= lookup_dns_addresses(zone_dns_names)
-        logger.debug(f"iteration {iterations}, so far collected {len(final_server_list)} servers.")
-        iterations += 1
-        if len(final_server_list) < pool_size:
-            time.sleep(60)
-        current_time = time.time()
-
-    logger.info(f"Total of {len(final_server_list)} servers collected")
-    return final_server_list
 
 def open_write_file(file_to_save, file_permissions):
     try:
@@ -313,13 +271,13 @@ send requests to a chosen list of ips, return the offsets they return
 def req_multiple_server_results(servers):
 
     responses = {}
-    ips_failed = []
+    ips_failed = set()
     for ip in servers:
         response = request_packet(ip, "")
         if response is not None:
             responses[ip] = response
         else:
-            ips_failed.append(ip)
+            ips_failed.add(ip)
 
     """
     Retry the failed requests

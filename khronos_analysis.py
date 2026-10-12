@@ -55,7 +55,7 @@ def recommend_server_removals(tracker, min_attempts=15, failure_rate_threshold=0
     """Return IPs with enough samples and an excessive request failure rate."""
     recommendations = []
     for ip, value in tracker.items():
-        if value["removed"]:
+        if value["Removed"]:
             continue
         attempts = value["response_count"] + value["fail_count"]
         if attempts < min_attempts:
